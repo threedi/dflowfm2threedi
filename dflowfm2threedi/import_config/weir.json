@@ -1,0 +1,195 @@
+{
+  "target_layer": "weir",
+  "conversion_settings": {
+    "use_snapping": true,
+    "snapping_distance": 0.1,
+    "create_connection_nodes": true,
+    "create_manholes": true,
+    "length_source_field": "",
+    "length_fallback_value": 1.0,
+    "azimuth_source_field": "",
+    "azimuth_fallback_value": 90,
+    "edit_channels": true
+  },
+  "fields": {
+    "id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "code": {
+      "method": "source_attribute",
+      "source_attribute": "id"
+    },
+    "display_name": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "crest_level": {
+      "method": "source_attribute",
+      "source_attribute": "crestlevel"
+    },
+    "crest_type": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 4,
+      "expression": "-- 3:  /*Broad crested*/\r\n-- 4:  /*Short crested*/\r\n\r\nCASE WHEN \"CrestWidth\" >= 5 THEN 3 \r\n     WHEN \"CrestWidth\" < 5 THEN 4 \r\n\t ELSE 3 \r\nEND\r\n\r\n-- ELSE: CrestWidth IS NULL\r\n"
+    },
+    "discharge_coefficient_positive": {
+      "method": "expression",
+      "source_attribute": "corrcoeff",
+      "expression": "CASE \r\n\tWHEN \"allowedflowdir\"  in ('both', 'positive') THEN  \"corrcoeff\" \r\n\tWHEN \"allowedflowdir\"  in ('none', 'negative') THEN  0\r\nEND\r\n"
+    },
+    "discharge_coefficient_negative": {
+      "method": "expression",
+      "source_attribute": "corrcoeff",
+      "expression": "CASE \r\n\tWHEN \"allowedflowdir\"  in ('both', 'negative') THEN  \"corrcoeff\" \r\n\tWHEN \"allowedflowdir\"  in ('none', 'positive') THEN  0\r\nEND\r\n"
+    },
+    "friction_value": {
+      "method": "ignore",
+      "source_attribute": "friction_value"
+    },
+    "friction_type": {
+      "method": "ignore",
+      "source_attribute": "friction_type",
+      "default_value": 2
+    },
+    "sewerage": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": false
+    },
+    "external": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": false
+    },
+    "zoom_category": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 2
+    },
+    "connection_node_start_id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "connection_node_end_id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "cross_section_shape": {
+      "method": "default",
+      "source_attribute": "cross_section_shape",
+      "default_value": 1
+    },
+    "cross_section_width": {
+      "method": "source_attribute",
+      "source_attribute": "crestwidth"
+    },
+    "cross_section_height": {
+      "method": "ignore",
+      "source_attribute": "cross_section_height"
+    },
+    "cross_section_table": {
+      "method": "ignore",
+      "source_attribute": "cross_section_table"
+    }
+  },
+  "connection_node_fields": {
+    "id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "code": {
+      "method": "expression",
+      "source_attribute": "",
+      "expression": "'Weir '||\"id\""
+    },
+    "initial_waterlevel": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "storage_area": {
+      "method": "ignore",
+      "source_attribute": "",
+      "default_value": 1.0
+    }
+  },
+  "manhole_fields": {
+    "id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "code": {
+      "method": "expression",
+      "source_attribute": "",
+      "expression": "'Orifice '||\"id\""
+    },
+    "display_name": {
+      "method": "ignore",
+      "source_attribute": "",
+      "expression": "'Orifice '||\"LongName\""
+    },
+    "calculation_type": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 2
+    },
+    "shape": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": "00"
+    },
+    "width": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 1.0
+    },
+    "length": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 1.0
+    },
+    "bottom_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "surface_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "drain_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "sediment_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "manhole_indicator": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 0
+    },
+    "zoom_category": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 2
+    },
+    "connection_node_id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "exchange_thickness": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "hydraulic_conductivity_in": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "hydraulic_conductivity_out": {
+      "method": "ignore",
+      "source_attribute": ""
+    }
+  }
+}

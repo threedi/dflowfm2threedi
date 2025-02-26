@@ -1,0 +1,183 @@
+{
+  "target_layer": "orifice",
+  "conversion_settings": {
+    "use_snapping": true,
+    "snapping_distance": 0.1,
+    "create_connection_nodes": true,
+    "create_manholes": false,
+    "length_source_field": "",
+    "length_fallback_value": 2.5,
+    "azimuth_source_field": "",
+    "azimuth_fallback_value": 90,
+    "edit_channels": true
+  },
+  "fields": {
+    "id": {
+      "method": "auto",
+      "source_attribute": "id"
+    },
+    "code": {
+      "method": "expression",
+      "source_attribute": "",
+      "expression": "'Pump '||id"
+    },
+    "display_name": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "crest_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "crest_type": {
+      "method": "ignore",
+      "source_attribute": "",
+      "default_value": "NULL"
+    },
+    "discharge_coefficient_positive": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "discharge_coefficient_negative": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "friction_value": {
+      "method": "ignore",
+      "source_attribute": "friction_value"
+    },
+    "friction_type": {
+      "method": "ignore",
+      "source_attribute": "friction_type",
+      "default_value": "NULL"
+    },
+    "sewerage": {
+      "method": "ignore",
+      "source_attribute": "",
+      "default_value": false
+    },
+    "zoom_category": {
+      "method": "ignore",
+      "source_attribute": "",
+      "default_value": "NULL"
+    },
+    "connection_node_start_id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "connection_node_end_id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "cross_section_shape": {
+      "method": "ignore",
+      "source_attribute": "cross_section_shape",
+      "default_value": "NULL"
+    },
+    "cross_section_width": {
+      "method": "ignore",
+      "source_attribute": "cross_section_width"
+    },
+    "cross_section_height": {
+      "method": "ignore",
+      "source_attribute": "cross_section_height"
+    },
+    "cross_section_table": {
+      "method": "ignore",
+      "source_attribute": "cross_section_table"
+    }
+  },
+  "connection_node_fields": {
+    "id": {
+      "method": "auto",
+      "source_attribute": "id"
+    },
+    "code": {
+      "method": "expression",
+      "source_attribute": "",
+      "expression": "'Pump '||id"
+    },
+    "initial_waterlevel": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "storage_area": {
+      "method": "ignore",
+      "source_attribute": ""
+    }
+  },
+  "manhole_fields": {
+    "id": {
+      "method": "auto",
+      "source_attribute": "id"
+    },
+    "code": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "display_name": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "calculation_type": {
+      "method": "source_attribute",
+      "source_attribute": "",
+      "default_value": "NULL"
+    },
+    "shape": {
+      "method": "source_attribute",
+      "source_attribute": "",
+      "default_value": "NULL"
+    },
+    "width": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "length": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "bottom_level": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "surface_level": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "drain_level": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "sediment_level": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "manhole_indicator": {
+      "method": "source_attribute",
+      "source_attribute": "",
+      "default_value": "NULL"
+    },
+    "zoom_category": {
+      "method": "source_attribute",
+      "source_attribute": "",
+      "default_value": "NULL"
+    },
+    "connection_node_id": {
+      "method": "auto",
+      "source_attribute": ""
+    },
+    "exchange_thickness": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "hydraulic_conductivity_in": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    },
+    "hydraulic_conductivity_out": {
+      "method": "source_attribute",
+      "source_attribute": ""
+    }
+  }
+}
