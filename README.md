@@ -37,7 +37,7 @@ This manual is based on using the following versions:
   3. BEFORE CONTINUING, RUN ALL THE VECTOR DATA IMPORTERS FIRST
   4. Replace pump-proxy orifices for real pumps
 - Run steps 1 and 2 of the script
-- The needed layers have been written to the 3Di schematisation geopackage as "dhydro_{layer name}". These layers are copies of the shapefile layers, enriched with data from the dsproj_data directory.
+- The needed layers have been written to the 3Di schematisation geopackage as ``dhydro_{layer name}``. These layers are copies of the shapefile layers, enriched with data from the dsproj_data directory.
 - Use the Open 3Di Geopackage option to add the schematisation to your QGIS project
 
 
@@ -49,23 +49,23 @@ It is recommended to imported D-Hydro culverts in 3 categories, based on their l
 - \> 25 m: culvert. Energy losses due to friction in the pipe are not neglible; The propagation of a discharge wave through the culvert may be relevant, so multiple calculation points are used within the culvert (calculation point distance is 25 m).
 
 Do the following:
-- Add the layer "dhydro_culvert" to the project
-- Set a filter "length" >= 25
-- Rename the layer to "dhydro_culvert >= 25m"
+- Add the layer ``dhydro_culvert`` to the project
+- Set a filter ``length >= 25``
+- Rename the layer to ``dhydro_culvert >= 25m``
 - Duplicate the layer
-- Rename the copy to "dhydro_culvert < 25m"
-- Set the filter of the copy to "length" < 25
+- Rename the copy to ``dhydro_culvert < 25m``
+- Set the filter of the copy to ``length < 25``
 
 Now you import both layers to your 3Di schematisation:
 - In the 3Di Schematisation Editor toolbar, click "Import schematisation objects" > Culverts
-- As Source culvert layer, choose "dhydro_culvert >= 25m
-- Load template > culvert_long.json
+- As Source culvert layer, choose ``dhydro_culvert >= 25m``
+- Load template > ``culvert_long.json``
 - Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
 - Run
 
 - In the 3Di Schematisation Editor toolbar, click "Import schematisation objects" > Orifices
-- As Source orifice layer, choose "dhydro_culvert < 25m
-- Load template > culvert_short.json
+- As Source orifice layer, choose ``dhydro_culvert < 25m``
+- Load template > ``culvert_short.json``
 - Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
 - Run
 
@@ -77,10 +77,10 @@ Now you import both layers to your 3Di schematisation:
 The import configuration imports the D-Hydro orifices as short-crested orifices with a closed rectangle shape in 3Di. The "gate lower edge level" is used as the height in the cross-section.  The line length of the orifice in the 3Di schematisation is 1 m.
 
 Do the following:
-- Add the layer "dhydro_orifice" to the project
+- Add the layer ``dhydro_orifice`` to the project
 - In the 3Di Schematisation Editor toolbar, click "Import schematisation objects" > Orifices
-- As Source orifice layer, choose "dhydro_orifice
-- Load template > orifice.json
+- As Source orifice layer, choose ``dhydro_orifice``
+- Load template > ``orifice.json``
 - Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
 - Run
 
@@ -89,10 +89,10 @@ Do the following:
 The import configuration imports the D-Hydro weirs as short-crested weirs with an open rectangle shape in 3Di. The line length of the weir in the 3Di schematisation is 1 m.
 
 Do the following:
-- Add the layer "dhydro_weir" to the project
+- Add the layer ``dhydro_weir`` to the project
 - In the 3Di Schematisation Editor toolbar, click "Import schematisation objects" > Weirs
-- As Source orifice layer, choose "dhydro_weir"
-- Load template > weir.json
+- As Source orifice layer, choose ``dhydro_weir``
+- Load template > ``weir.json``
 - Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
 - Run
 
@@ -101,10 +101,10 @@ Do the following:
 At the moment of writing, there is no vector data importer available for pumps. However, we can use the existing functionality of the vector data importers to cut the pumps out of the channel network. The way we do this is by importing the pumps as dummy orifices, which will subsequently be replaced by pumps and pump_maps.
 
 Do the following: 
-- Add the layer "dhydro_pump" to the project
+- Add the layer ``dhydro_pump`` to the project
 - In the 3Di Schematisation Editor toolbar, click "Import schematisation objects" > Orifices
-- As Source orifice layer, choose "dhydro_pump"
-- Load template > pump_proxy_orifice.json
+- As Source orifice layer, choose ``dhydro_pump``
+- Load template > ``pump_proxy_orifice.json``
 - Run
 - Remove the schematisation from the project
 - Run step 4 of the script (4. Replace pump-proxy orifices for real pumps)
