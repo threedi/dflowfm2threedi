@@ -2,7 +2,7 @@
 
 This software can make your life much easier if converting SOBEK/D-Hydro/D-FlowFM to 3Di has become a central concern to you. However, 
 
-** no guarantees as to the correctness of the conversion are given whatsoever. ** 
+**no guarantees as to the correctness of the conversion are given whatsoever.** 
 
 Please check the result thoroughly.
 
