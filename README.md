@@ -1,4 +1,6 @@
-# dflowfm2threedi: Workflow for converting SOBEK/D-Hydro/D-FlowFM 1D networks to 3Di schematisations
+# dflowfm2threedi
+
+#### *Workflow for converting SOBEK/D-Hydro/D-FlowFM 1D networks to 3Di schematisations*
 
 This software can make your life much easier if converting SOBEK/D-Hydro/D-FlowFM to 3Di has become a central concern to you. However, 
 
@@ -27,7 +29,9 @@ This manual is based on using the following versions:
 - Browse to the CASELIST.CMT file > Select the case you want to work with
 - Next > Next > Next
 - Carefully check warnings and errors. Save them in a file. If there are any errors, the quickest fix is to skip those parts of the import and think of a custom workaround later in the process
+- If D-Hydro complains about duplicates in the friction file, you can use ``sobek_utils.deduplicate_friction_file()`` to fix this and try the import again.
 - Save the project. Remember where you saved it. D-Hydro saves a file "{project name}.dsproj" and a directory "{project name}.dsproj_data". This will be referred to as the "dsproj_data directory"
+ 
 
 ## Importing to 3Di
 
@@ -122,16 +126,46 @@ Do the following:
 - Run the schematisation checker and try to fix all errors and warnings.
 
 
+## Technical reference
+
+### Translation of D-Hydro friction types to 3Di
+
+The following logic is applied:
+
+    if self.friction_type == DHydroFrictionType.chezy:
+        friction_type = ThreeDiFrictionType.CHEZY
+        friction_value = self.friction_value
+    elif self.friction_type == DHydroFrictionType.manning:
+        friction_type = ThreeDiFrictionType.MANNING
+        friction_value = self.friction_value
+    elif self.friction_type == DHydroFrictionType.strickler:
+        friction_type = ThreeDiFrictionType.MANNING
+        friction_value = np.round(1 / self.friction_value, 4)
+    elif self.friction_type == DHydroFrictionType.whitecolebrook:
+        friction_type = ThreeDiFrictionType.MANNING
+        friction_value = np.round(self.friction_value ** (1 / 6) / 21.1, 4)  # this is far from perfect
+        # but gives a good approx.
+    elif self.friction_type is None:
+        friction_type = ThreeDiFrictionType.NONE
+        friction_value = None
+    else:
+        friction_type = ThreeDiFrictionType.NONE
+        friction_value = None
+        conversion_success = False
+        failure_reason = f"Unknown friction type {self.friction_type}"
+
+
 ## Troubleshooting
-You might run into errors. This is a list of possible errors:
-- During handling of the above exception, another exception occurred:
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-  File "C:\Users\kasper.lange\.conda\envs\dflowfm23di\Lib\site-packages\hydrolib\core\basemodel.py", line 913, in __init__
-	super().__init__(*args, **kwargs)
-  File "C:\Users\kasper.lange\.conda\envs\dflowfm23di\Lib\site-packages\hydrolib\core\basemodel.py", line 91, in __init__
-	raise ValidationError([ErrorWrapper(e, loc=identifier)], self.__class__)
+You might run into errors. This is a list of possible errors
+
+### Unknown keywords are detected
+
+Example:
+```
 pydantic.v1.error_wrappers.ValidationError: 1 validation error for CrossLocModel
 crsloc.ini -> crosssection -> 8862 -> __root__
   Unknown keywords are detected in section: 'CrossSection', '['name']' (type=value_error)
--	 To fix this: look for the keyword (in this case 'name') in the file crsloc and delete the line.
+```
+
+To fix this: look for the keyword (in this case 'name') in the file crsloc and delete the line.
+
