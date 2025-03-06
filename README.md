@@ -15,6 +15,10 @@ This manual is based on using the following versions:
 - 3Di Schematisation Editor 1.16
 - 3Di database schema version 219
 
+## Installation
+- Required packages: hydrolib-core (pip install hydrolib-core)
+- Required packages: h5netcdf (pip install h5netcdf)
+
 ## SOBEK to D-HYDRO
 
 - Open D-HYDRO Suite 1D2D
@@ -116,3 +120,18 @@ Do the following:
 - Check & fix any channels that are shorter than 5 m
 - Check & fix any structures that are not connected to the network
 - Run the schematisation checker and try to fix all errors and warnings.
+
+
+## Troubleshooting
+You might run into errors. This is a list of possible errors:
+- During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "C:\Users\kasper.lange\.conda\envs\dflowfm23di\Lib\site-packages\hydrolib\core\basemodel.py", line 913, in __init__
+	super().__init__(*args, **kwargs)
+  File "C:\Users\kasper.lange\.conda\envs\dflowfm23di\Lib\site-packages\hydrolib\core\basemodel.py", line 91, in __init__
+	raise ValidationError([ErrorWrapper(e, loc=identifier)], self.__class__)
+pydantic.v1.error_wrappers.ValidationError: 1 validation error for CrossLocModel
+crsloc.ini -> crosssection -> 8862 -> __root__
+  Unknown keywords are detected in section: 'CrossSection', '['name']' (type=value_error)
+-	 To fix this: look for the keyword (in this case 'name') in the file crsloc and delete the line.
