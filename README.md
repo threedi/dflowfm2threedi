@@ -17,6 +17,10 @@ This manual is based on using the following versions:
 - 3Di Schematisation Editor 1.16
 - 3Di database schema version 219
 
+## Installation
+- Required packages: hydrolib-core (pip install hydrolib-core)
+- Required packages: h5netcdf (pip install h5netcdf)
+
 ## SOBEK to D-HYDRO
 
 - Open D-HYDRO Suite 1D2D
@@ -150,4 +154,18 @@ The following logic is applied:
         conversion_success = False
         failure_reason = f"Unknown friction type {self.friction_type}"
 
+
+## Troubleshooting
+You might run into errors. This is a list of possible errors
+
+### Unknown keywords are detected
+
+Example:
+```
+pydantic.v1.error_wrappers.ValidationError: 1 validation error for CrossLocModel
+crsloc.ini -> crosssection -> 8862 -> __root__
+  Unknown keywords are detected in section: 'CrossSection', '['name']' (type=value_error)
+```
+
+To fix this: look for the keyword (in this case 'name') in the file crsloc and delete the line.
 
