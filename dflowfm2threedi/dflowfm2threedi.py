@@ -2,7 +2,6 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from pprint import pprint
 from types import NoneType
 from typing import Dict, List, Type, Optional, Tuple, Callable
 
@@ -13,7 +12,8 @@ from osgeo import ogr, osr
 from shapely import Point
 from shapely.geometry import LineString
 
-from hydrolib_utils import read_friction, read_cross_sections, ThreeDiCrossSectionData, ThreeDiFrictionData
+from hydrolib_utils import read_friction, read_cross_sections, ThreeDiCrossSectionData, ThreeDiFrictionData, \
+    BranchFrictionDefinition
 
 ogr.UseExceptions()
 
@@ -290,23 +290,6 @@ def get_field_definitions(objects: List[INIBasedModel]) -> List[ogr.FieldDefn]:
             raise ValueError(f"The values in field {attribute} have different types: {python_types}")
     return result
 
-#
-# def extract_cross_section_locations(cross_section_locations_file: Path, branches: Dict) -> Dict:
-#     cross_section_locations = CrossLocModel(cross_section_locations_file).crosssection
-#     field_definitions = get_field_definitions(cross_section_locations)
-#     layer_dict = dict()
-#     for cross_section_location in cross_section_locations:
-#         feature_dict = dict()
-#         feature_dict["geometry"] = geometry_from_chainage(
-#             branches=branches,
-#             branch_id=cross_section_location.branchid,
-#             chainage=cross_section_location.chainage
-#         )
-#         for field_definition in field_definitions:
-#             feature_dict[field_definition.name] = getattr(cross_section_location, field_definition.name)
-#         layer_dict[cross_section_location.id] = feature_dict
-#     return layer_dict
-
 
 def extract_from_ini(ini_file: Path, object_type: Type[INIBasedModel], branches: Dict) -> Tuple[Dict, List[ogr.FieldDefn]]:
     if object_type == CrossSection:
@@ -573,6 +556,44 @@ def enrich_cross_section_locations(
         data_source = None  # Close the data source
 
 
+def enrich_cross_section_definition(
+        cross_section_definition: ThreeDiCrossSectionData,
+        cross_section_locations: Dict[str, Dict],
+        branch_friction_definitions: Dict[str, List[BranchFrictionDefinition]]
+) -> ThreeDiCrossSectionData:
+    """
+    Find branch friction data for given cross-section definition and update it accordingly
+    If no branch friction data is found, cross-section definition is returned unaltered.
+    """
+
+    # Find cross-section location that has this cross-section definition
+    found_xsec_loc = False
+    for cross_section_location in cross_section_locations.values():
+        if cross_section_location["definitionid"] == cross_section_definition.code:
+            found_xsec_loc = True
+            break
+    if not found_xsec_loc:
+        return cross_section_definition
+
+    try:
+        if cross_section_location["branchid"] == "W4890":
+            a = branch_friction_definitions[cross_section_location["branchid"]]
+    except KeyError:
+        pass
+
+    # Find the branch friction definition for this cross-section location
+    try:
+        friction_definitions = branch_friction_definitions[cross_section_location["branchid"]]
+    except KeyError:
+        return cross_section_definition
+    for friction_definition in friction_definitions:
+        if round(friction_definition.chainage, 2) == round(cross_section_location["chainage"], 2):
+            # Update the cross-section definition with friction data from the BranchFrictionDefinition
+            cross_section_definition.friction_data = friction_definition.to_threedi()
+
+    return cross_section_definition
+
+
 def replace_structures(
         gpkg: Path,
         source: Dict,
@@ -753,9 +774,23 @@ def dflowfm2threedi(
     )
 
     # Get cross-section definitions
-    friction_definitions = read_friction(mdu_file=mdu_path)
+    friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
 
-    cross_sections = read_cross_sections(cross_def_path=cross_def_path, friction_definitions=friction_definitions)
+    cross_section_definitions: Dict[str, ThreeDiCrossSectionData] = read_cross_sections(
+    # ThreeDiCrossSectionData.friction_data: ThreeDiFrictionData
+        cross_def_path=cross_def_path,
+        global_friction_definitions=friction_definitions
+    )
+
+    # enrich cross_section_definitions with branch friction data
+    cross_section_definitions = {
+        id: enrich_cross_section_definition(
+            cross_section_definition,
+            cross_section_locations,
+            branch_friction_definitions,
+        )
+        for id, cross_section_definition in cross_section_definitions.items()
+    }
 
     cross_section_id_to_defname_mapping = get_cross_section_location_id_to_defname_mapping(
         name_id_mapping=cross_section_id_mapping,
@@ -763,7 +798,7 @@ def dflowfm2threedi(
     )
 
     enrich_cross_section_locations(
-        cross_section_data=cross_sections,
+        cross_section_data=cross_section_definitions,
         gpkg=target_gpkg,
         cross_section_id_to_defname_mapping=cross_section_id_to_defname_mapping
     )
@@ -784,7 +819,7 @@ def dflowfm2threedi(
                 source=extracted_data,
                 epsg_code=28992,
                 target=target_gpkg,
-                cross_section_data=cross_sections,
+                cross_section_data=cross_section_definitions,
                 field_definitions=field_definitions,
                 feature_type=structure_type.__name__.lower()
         )
@@ -828,8 +863,8 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
 
 
 if __name__ == "__main__":
-    base_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337 DHydro")
-    flow_fm_input_path = base_dir / "Overijssel - P1337.dsproj_data" / "FlowFM" / "input"
+    dsproj_data_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337def_case4.dsproj_data")
+    flow_fm_input_path = dsproj_data_dir / "FlowFM" / "input"
     network_file_path = flow_fm_input_path / "FlowFM_net.nc"
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
     cross_section_locations_path = flow_fm_input_path / "crsloc.ini"
@@ -837,8 +872,7 @@ if __name__ == "__main__":
     structures_path = flow_fm_input_path / "structures.ini"
 
     target_gpkg = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Sobek naar 3Di zandbak\work in progress\schematisation\Sobek "
-        r"naar 3Di zandbak.gpkg"
+        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Stroink\work in progress\schematisation\Stroink.gpkg"
     )
 
     # Clear schematisation geopackage (OPTIONAL)
@@ -871,7 +905,7 @@ if __name__ == "__main__":
     ##############################################################
 
     # Replace pump-proxy orifices for real pumps
-    orifices_to_pumps(gpkg=target_gpkg, network_file=network_file_path, structures_file=structures_path)
+    # orifices_to_pumps(gpkg=target_gpkg, network_file=network_file_path, structures_file=structures_path)
 
     print("Klaar")
 

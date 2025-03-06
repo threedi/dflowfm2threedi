@@ -4,7 +4,7 @@ import io
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Dict, Type, SupportsRound
+from typing import List, Optional, Dict, Type, SupportsRound, Tuple
 from pathlib import Path
 
 from hydrolib.core.dflowfm import Weir, Culvert, Orifice, FlowDirection, Structure, StructureModel, Compound
@@ -53,7 +53,6 @@ class ThreeDiFrictionType(Enum):
 
 
 class ThreeDiCrossSectionData:
-
     fields = {
         "reference_level": float,
         "bank_level": float,
@@ -92,8 +91,6 @@ class ThreeDiCrossSectionData:
         return result
 
 
-
-
 @dataclass
 class ThreeDiFrictionData:
     fields = {
@@ -103,21 +100,17 @@ class ThreeDiFrictionData:
     friction_type: ThreeDiFrictionType
     friction_value: float
     is_valid: bool  # we want to track validity without raising exceptions yet,
-                    # to prevent exceptions for data that is not eventually used in the export
+    # to prevent exceptions for data that is not eventually used in the export
     invalid_reason: str | None
-    friction_id: str = None
 
 
-class FrictionData:
+class GenericFrictionDefinition:
     def __init__(
             self,
-            friction_id: str = None,
             friction_type: DHydroFrictionType = None,
             friction_value: float = None,
-            friction_definitions: Dict[str, "FrictionData"] = None,
             is_valid: Optional[bool] = None,
             invalid_reason: Optional[str] = None
-
     ):
         """
         If friction_type or friction_value are None,
@@ -129,35 +122,16 @@ class FrictionData:
         If the argument is_valid = False, an empty FrictionData will be created that does contain the provided
         invalid_reason
         """
-        self.friction_id = friction_id
         if is_valid == False:
             self.friction_type = DHydroFrictionType(friction_type) if friction_type else None
             self.friction_value = friction_value
             self.is_valid = is_valid
             self.invalid_reason = invalid_reason
         else:
-            try:
-                if friction_type:
-                    self.friction_type = DHydroFrictionType(friction_type)
-                elif friction_id:
-                    self.friction_type = DHydroFrictionType(friction_definitions[friction_id].friction_type)
-                else:
-                    self.friction_type = None
-
-                if friction_value:
-                    self.friction_value = friction_value
-                elif friction_id:
-                    self.friction_value = friction_definitions[friction_id].friction_value
-                else:
-                    self.friction_value = None
-
-                self.is_valid = True
-                self.invalid_reason = None
-            except KeyError:
-                self.friction_type = DHydroFrictionType(friction_type) if friction_type else None
-                self.friction_value = friction_value
-                self.is_valid = False
-                self.invalid_reason = f"Friction ID '{friction_id}' not found"
+            self.friction_type = DHydroFrictionType(friction_type) if friction_type else None
+            self.friction_value = friction_value
+            self.is_valid = True
+            self.invalid_reason = None
 
     def to_threedi(self) -> ThreeDiFrictionData:
         if self.is_valid:
@@ -174,8 +148,8 @@ class FrictionData:
                 friction_value = np.round(1 / self.friction_value, 4)
             elif self.friction_type == DHydroFrictionType.whitecolebrook:
                 friction_type = ThreeDiFrictionType.MANNING
-                friction_value = np.round(self.friction_value ** (1/6) / 21.1, 4)  # this is far from perfect
-                                                                                            # but gives a good approx.
+                friction_value = np.round(self.friction_value ** (1 / 6) / 21.1, 4)  # this is far from perfect
+                # but gives a good approx.
             elif self.friction_type is None:
                 friction_type = ThreeDiFrictionType.NONE
                 friction_value = None
@@ -197,11 +171,50 @@ class FrictionData:
         result = ThreeDiFrictionData(
             friction_type=friction_type,
             friction_value=friction_value,
-            friction_id=self.friction_id,
             is_valid=self.is_valid and conversion_success,
             invalid_reason="; ".join(invalid_reason),
         )
         return result
+
+
+class GlobalFrictionDefinition(GenericFrictionDefinition):
+    def __init__(self, friction_id: str, friction_type: DHydroFrictionType = None, friction_value: float = None,
+                 is_valid: Optional[bool] = None, invalid_reason: Optional[str] = None):
+        """
+        Friction definition with a friction_id, to be coupled with a cross-section definition
+
+        Sets ``self.is_valid`` and ``self.invalid_reason`` to track validity without raising exceptions yet, to prevent exceptions
+        on data that is not eventually used in the export
+
+        If the argument is_valid = False, an empty FrictionData will be created that does contain the provided
+        invalid_reason
+        """
+        super().__init__(friction_type, friction_value, is_valid, invalid_reason)
+        self.friction_id = friction_id
+
+
+class BranchFrictionDefinition(GenericFrictionDefinition):
+    def __init__(
+            self,
+            branch_id: str,
+            chainage: float,
+            friction_type: DHydroFrictionType = None,
+            friction_value: float = None,
+            is_valid: Optional[bool] = None,
+            invalid_reason: Optional[str] = None
+    ):
+        """
+        Friction definition with a branch_id and chainage, to be coupled with a cross-section location
+
+        Sets ``self.is_valid`` and ``self.invalid_reason`` to track validity without raising exceptions yet, to prevent exceptions
+        on data that is not eventually used in the export
+
+        If the argument is_valid = False, an empty FrictionData will be created that does contain the provided
+        invalid_reason
+        """
+        super().__init__(friction_type, friction_value, is_valid, invalid_reason)
+        self.branch_id = branch_id
+        self.chainage = chainage
 
 
 def none_round(number: SupportsRound, ndigits: int = None):
@@ -211,43 +224,6 @@ def none_round(number: SupportsRound, ndigits: int = None):
     :return:
     """
     return round(number, ndigits) if number is not None else None
-
-
-# def convert_friction_data_list(
-#         friction_types: List,
-#         friction_values: List[float],
-#         friction_ids: List[str],
-#         friction_definitions: Dict[str, FrictionData],
-#         conveyance: str = None,
-# ) -> Tuple[List[ThreeDiFrictionType], List[float]] | Tuple[List[None], List[None]]:
-#     # TODO use the conveyance argument to set the friction type
-#     #   conveyance: Optional[str] = Field("segmented")  # "lumped" means no conveyance, "segmented" means yes conveyance
-#     result_friction_types = list()
-#     result_friction_values = list()
-#     if friction_types and friction_values:
-#         if len(friction_types) != len(friction_values):
-#             raise ValueError("friction_types and friction_values do not have the same length")
-#         for i in range(len(friction_types)):
-#             friction_data = FrictionData(
-#                 friction_type=DHydroFrictionType(friction_types[i]) if friction_types[i] else None,
-#                 friction_value=friction_values[i],
-#             )
-#             friction_data_threedi = friction_data.to_threedi()
-#             result_friction_types.append(friction_data_threedi.friction_type)
-#             result_friction_values.append(friction_data_threedi.friction_value)
-#         return result_friction_types, result_friction_values
-#     elif friction_ids:
-#         for i in range(len(friction_ids)):
-#             friction_data = FrictionData(
-#                 friction_id=friction_ids[i],
-#                 friction_definitions=friction_definitions
-#             )
-#             friction_data_threedi = friction_data.to_threedi()
-#             result_friction_types.append(friction_data_threedi.friction_type)
-#             result_friction_values.append(friction_data_threedi.friction_value)
-#         return result_friction_types, result_friction_values
-#     else:
-#         return [None], [None]
 
 
 def lists_to_csv(columns: List[List[float]], decimals=None) -> str:
@@ -276,9 +252,24 @@ def lists_to_csv(columns: List[List[float]], decimals=None) -> str:
     return output.getvalue().rstrip("\n")
 
 
+# def friction_definition_for_cross_section(
+#         cross_section_definition: CrossSectionDefinition,
+#         global_friction_definitions: Dict[str, FrictionData],
+#         branch_friction_definitions: Dict[str, List[BranchFrictionData]],
+# ):
+#     try:
+#         friction_definition = branch_friction_definitions[cross_section_definition.branchid]
+# # Get or create a FrictionData object
+#     # Try to get it from Branch friction definitions
+#     # Try to get it from Global friction definitions
+#     # Create it
+
+# Overwrite the type and value with data from the cross-section
+
+
 def cross_section_def2threedi(
         cross_section_definition: CrossSectionDefinition,
-        friction_definitions: Dict[str, FrictionData]
+        friction_definitions: Dict[str, GlobalFrictionDefinition]
 ):
     """
     Note that for tabulated cross-sections such as ZW, ZW River, YZ, etc. the flow widths are used and the total widths
@@ -287,12 +278,11 @@ def cross_section_def2threedi(
 
     # Friction data: CircleCrsDef, RectangleCrsDef, ZWCrsDef
     if type(cross_section_definition) in [CircleCrsDef, RectangleCrsDef, ZWCrsDef]:
-        friction_data = FrictionData(
+        friction_definition = GlobalFrictionDefinition(
             friction_id=cross_section_definition.frictionid,
             friction_type=DHydroFrictionType(cross_section_definition.frictiontype) if
             cross_section_definition.frictiontype else None,
             friction_value=cross_section_definition.frictionvalue,
-            friction_definitions=friction_definitions
         )
 
     # Friction data: ZWRiverCrsDef, YZCrsDef
@@ -316,11 +306,10 @@ def cross_section_def2threedi(
                 is_valid = False
                 invalid_reason = "Multiple friction values for one cross-section are not yet supported."
 
-        friction_data = FrictionData(
+        friction_definition = GlobalFrictionDefinition(
             friction_id=friction_id,
             friction_type=friction_type,
             friction_value=friction_value,
-            friction_definitions=friction_definitions,
             is_valid=is_valid,
             invalid_reason=invalid_reason,
         )
@@ -392,33 +381,60 @@ def cross_section_def2threedi(
         cross_section_width=none_round(width, 3),
         cross_section_height=none_round(height, 3),
         cross_section_table=table,
-        friction_data=friction_data.to_threedi()
+        friction_data=friction_definition.to_threedi()
     )
 
 
-def read_friction(mdu_file: Path) -> Dict[str, FrictionData]:
+def read_friction(mdu_file: Path) -> Tuple[
+    Dict[str, GlobalFrictionDefinition],
+    Dict[str, List[BranchFrictionDefinition]]
+]:
+    """
+    Returns a {friction_id: GlobalFrictionDefinition} dict and a {branch_id: List[BranchFrictionDefinition]} dict
+    """
     # We read the MDU file with generic python libraries
     # because reading it with hydrolib-core raises all sorts of validation errors
     mdu = configparser.ConfigParser()
     mdu.read(mdu_file)
     frict_files = mdu["geometry"]["FrictFile"].split(";")
     friction_definitions_dict = dict()
+    branch_friction_definitions_dict = dict()
     for frict_file in frict_files:
         friction_path = mdu_file.parent / frict_file
         friction_definitions = FrictionModel(friction_path)
         # get friction definitions from global entries
         for friction_definition in friction_definitions.global_:
-            friction_definitions_dict[friction_definition.frictionid] = FrictionData(
+            friction_definitions_dict[friction_definition.frictionid] = GlobalFrictionDefinition(
                 friction_id=friction_definition.frictionid,
                 friction_type=DHydroFrictionType(friction_definition.frictiontype) if
                 friction_definition.frictiontype else None,
                 friction_value=friction_definition.frictionvalue
             )
 
-        # raise exception if there are any branch entries (not supported)
-        if friction_definitions.branch:
-            raise NotImplementedError("Complex branch friction definitions are not yet implemented")
-    return friction_definitions_dict
+        for friction_definition in friction_definitions.branch:
+            if not friction_definition.chainage:
+                continue
+
+            if friction_definition.functiontype.lower() != 'constant':
+                warnings.warn(
+                    f"Friction definition with a function type other than 'constant' are not supported. "
+                    f"Function type: {friction_definition.functiontype}. "
+                    f"Branch ID: {friction_definition.branchid}. "
+                    f"Chainage: {friction_definition.chainage}."
+                )
+
+            friction_definitions_for_this_branch = []
+            for i, chainage in enumerate(friction_definition.chainage):
+                branch_friction_definition = BranchFrictionDefinition(
+                    branch_id=friction_definition.branchid,
+                    chainage=chainage,
+                    friction_type=DHydroFrictionType(friction_definition.frictiontype) if
+                    friction_definition.frictiontype else None,
+                    friction_value=friction_definition.frictionvalues[i]
+                )
+                friction_definitions_for_this_branch.append(branch_friction_definition)
+            branch_friction_definitions_dict[friction_definition.branchid] = friction_definitions_for_this_branch
+    return friction_definitions_dict, branch_friction_definitions_dict
 
 
 def count_cross_section_types(cross_def_path: Path) -> Dict[Type[CrossSectionDefinition], int]:
@@ -454,14 +470,15 @@ def check_structures(path: Path):
 
 def read_cross_sections(
         cross_def_path: Path,
-        friction_definitions: Dict[str, FrictionData]
+        global_friction_definitions: Dict[str, GlobalFrictionDefinition],
 ) -> Dict[str, ThreeDiCrossSectionData]:
     """
-    Reads cross-sections from DHydro, combines them with friction data, and returns them in a 3Di compatible format
+    Reads cross-section definitions from DHydro, combines them with global friction data, and returns them in a 3Di
+    compatible format
     """
     cross_defs = CrossDefModel(cross_def_path)
     threedi_xsecs_list = [
-        cross_section_def2threedi(cross_section_definition=xsec, friction_definitions=friction_definitions)
+        cross_section_def2threedi(cross_section_definition=xsec, friction_definitions=global_friction_definitions)
         for xsec in cross_defs.definition
     ]
     threedi_xsecs = {xsec.code: xsec for xsec in threedi_xsecs_list}
@@ -469,14 +486,64 @@ def read_cross_sections(
 
 
 if __name__ == "__main__":
-
     flow_fm_input_path = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337 DHydro\Overijssel - P1337.dsproj_data\FlowFM\input"
+        # r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337 DHydro\Overijssel - P1337.dsproj_data\FlowFM\input"
+        r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337def_case4.dsproj_data\FlowFM\input"
     )
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
     cross_def_path = flow_fm_input_path / "crsdef.ini"
+    cross_defs = CrossDefModel(cross_def_path)
 
-    friction_definitions = read_friction(mdu_file=mdu_path)
-    cross_sections = read_cross_sections(cross_def_path=cross_def_path, friction_definitions=friction_definitions)
+    friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
+    cross_sections = read_cross_sections(
+        cross_def_path=cross_def_path,
+        global_friction_definitions=friction_definitions
+    )
+
+    no_chainage = list()
+
+    mdu = configparser.ConfigParser()
+    mdu.read(mdu_path)
+    frict_files = mdu["geometry"]["FrictFile"].split(";")
+    friction_definitions_dict = dict()
+    branch_friction_definitions_dict = dict()
+    for frict_file in frict_files:
+        friction_path = mdu_path.parent / frict_file
+        friction_definitions = FrictionModel(friction_path)
+        # get friction definitions from global entries
+        for friction_definition in friction_definitions.global_:
+            friction_definitions_dict[friction_definition.frictionid] = GlobalFrictionDefinition(
+                friction_id=friction_definition.frictionid,
+                friction_type=DHydroFrictionType(friction_definition.frictiontype) if
+                friction_definition.frictiontype else None,
+                friction_value=friction_definition.frictionvalue
+            )
+
+        for friction_definition in friction_definitions.branch:
+            if not friction_definition.chainage:
+                no_chainage.append(friction_definition)
+                continue
+
+            if friction_definition.functiontype.lower() != 'constant':
+                warnings.warn(
+                    f"Friction definition with a function type other than 'constant' are not supported. "
+                    f"Function type: {friction_definition.functiontype}. "
+                    f"Branch ID: {friction_definition.branchid}. "
+                    f"Chainage: {friction_definition.chainage}."
+                )
+
+            friction_definitions_for_this_branch = []
+            for i, chainage in enumerate(friction_definition.chainage):
+                branch_friction_definition = BranchFrictionDefinition(
+                    branch_id=friction_definition.branchid,
+                    chainage=chainage,
+                    friction_type=DHydroFrictionType(friction_definition.frictiontype) if
+                    friction_definition.frictiontype else None,
+                    friction_value=friction_definition.frictionvalues[i]
+                )
+                friction_definitions_for_this_branch.append(branch_friction_definition)
+            branch_friction_definitions_dict[friction_definition.branchid] = friction_definitions_for_this_branch
+
+    a = branch_friction_definitions_dict["W4890"]
 
     print("Klaar")
