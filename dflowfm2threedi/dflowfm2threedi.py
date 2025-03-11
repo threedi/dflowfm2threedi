@@ -875,30 +875,30 @@ if __name__ == "__main__":
         r"C:\Users\leendert.vanwolfswin\Documents\3Di\Stroink\work in progress\schematisation\Stroink.gpkg"
     )
 
-    # Clear schematisation geopackage (OPTIONAL)
-    clear_gpkg(
-        gpkg=target_gpkg,
-        layers_to_clear=[
-            "connection_node",
-            "channel",
-            "cross_section_location",
-            "culvert",
-            "orifice",
-            "weir",
-            "pumpstation",
-            "pumpstation_map",
-        ]
-    )
+    # # Clear schematisation geopackage (OPTIONAL)
+    # clear_gpkg(
+    #     gpkg=target_gpkg,
+    #     layers_to_clear=[
+    #         "connection_node",
+    #         "channel",
+    #         "cross_section_location",
+    #         "culvert",
+    #         "orifice",
+    #         "weir",
+    #         "pumpstation",
+    #         "pumpstation_map",
+    #     ]
+    # )
 
-    # Export DFlowFM data to 3Di
-    dflowfm2threedi(
-        target_gpkg=target_gpkg,
-        mdu_path=mdu_path,
-        network_file_path=network_file_path,
-        cross_section_locations_path=cross_section_locations_path,
-        cross_def_path=cross_def_path,
-        structures_path=structures_path,
-    )
+    # # Export DFlowFM data to 3Di
+    # dflowfm2threedi(
+    #     target_gpkg=target_gpkg,
+    #     mdu_path=mdu_path,
+    #     network_file_path=network_file_path,
+    #     cross_section_locations_path=cross_section_locations_path,
+    #     cross_def_path=cross_def_path,
+    #     structures_path=structures_path,
+    # )
 
     ##############################################################
     # BEFORE CONTINUING, RUN ALL THE VECTOR DATA IMPORTERS FIRST #

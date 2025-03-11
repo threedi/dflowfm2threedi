@@ -546,4 +546,8 @@ if __name__ == "__main__":
 
     a = branch_friction_definitions_dict["W4890"]
 
+    structures_path = flow_fm_input_path / "structures.ini"
+    s = StructureModel(structures_path)
+    orifices = [struct for struct in s.structure if struct.type == "orifice"]
+
     print("Klaar")

@@ -121,8 +121,85 @@ Do the following:
 - Carefully check the result, do not assume that the script and importers are perfect.  
 - Manholes do not have a bottom level. Not sure if this is a problem, I think 3Di just uses the reference level / invert level of the adjacent channel or culvert. If it is a problem, you may want to run the "Manhole bottom level from pipes" tool with culverts as input.
 - Same for drain level
-- Check & fix any channels that are shorter than 5 m
-- Check & fix any structures that are not connected to the network
+- Check & fix any channels that are shorter than 5 m: see `postprocessing.py`
+- Check & fix any structures that are not connected to the network. You can run this SQL in the database manager to identify culverts that are not connected to the network on one or both sides:
+
+**Culverts**
+    
+    with cono_ids as (
+        select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+        union
+        select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+        union
+        select connection_node_start_id as id from weir where connection_node_start_id != connection_node_end_id
+        union
+        select connection_node_end_id as id from weir where connection_node_start_id != connection_node_end_id
+        union
+        select connection_node_start_id as id from orifice where connection_node_start_id != connection_node_end_id
+        union
+        select connection_node_end_id as id from orifice where connection_node_start_id != connection_node_end_id
+    )
+    SELECT DISTINCT culvert.* 
+    FROM culvert
+    where 
+        connection_node_start_id not in (select id from cono_ids)
+        or
+        connection_node_end_id not in (select id from cono_ids)
+    ;
+
+**Orifices**
+
+    with cono_ids as (
+            select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_start_id as id from weir where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from weir where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_start_id as id from culvert where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from culvert where connection_node_start_id != connection_node_end_id
+        )
+    SELECT DISTINCT orifice.* 
+    FROM orifice
+    where 
+        connection_node_start_id not in (select id from cono_ids)
+        or
+        connection_node_end_id not in (select id from cono_ids)
+    ;
+
+**Pumpstation map**
+
+
+    with cono_ids as (
+            select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_start_id as id from weir where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from weir where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_start_id as id from culvert where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from culvert where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_start_id as id from orifice where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from orifice where connection_node_start_id != connection_node_end_id
+
+    )
+    SELECT DISTINCT pumpstation_map.* 
+    FROM pumpstation_map
+    where 
+        connection_node_start_id not in (select id from cono_ids)
+        or
+        connection_node_end_id not in (select id from cono_ids)
+    ;
+
+
 - Run the schematisation checker and try to fix all errors and warnings.
 
 
