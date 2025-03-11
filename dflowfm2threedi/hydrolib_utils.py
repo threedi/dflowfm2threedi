@@ -479,4 +479,8 @@ if __name__ == "__main__":
     friction_definitions = read_friction(mdu_file=mdu_path)
     cross_sections = read_cross_sections(cross_def_path=cross_def_path, friction_definitions=friction_definitions)
 
+    structures_path = flow_fm_input_path / "structures.ini"
+    s = StructureModel(structures_path)
+    orifices = [struct for struct in s.structure if struct.type == "orifice"]
+
     print("Klaar")

@@ -828,8 +828,8 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
 
 
 if __name__ == "__main__":
-    base_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337 DHydro")
-    flow_fm_input_path = base_dir / "Overijssel - P1337.dsproj_data" / "FlowFM" / "input"
+    dsproj_data_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337def_case4.dsproj_data")
+    flow_fm_input_path = dsproj_data_dir / "FlowFM" / "input"
     network_file_path = flow_fm_input_path / "FlowFM_net.nc"
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
     cross_section_locations_path = flow_fm_input_path / "crsloc.ini"
@@ -837,34 +837,33 @@ if __name__ == "__main__":
     structures_path = flow_fm_input_path / "structures.ini"
 
     target_gpkg = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Sobek naar 3Di zandbak\work in progress\schematisation\Sobek "
-        r"naar 3Di zandbak.gpkg"
+        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Stroink\work in progress\schematisation\Stroink.gpkg"
     )
 
-    # Clear schematisation geopackage (OPTIONAL)
-    clear_gpkg(
-        gpkg=target_gpkg,
-        layers_to_clear=[
-            "connection_node",
-            "channel",
-            "cross_section_location",
-            "culvert",
-            "orifice",
-            "weir",
-            "pumpstation",
-            "pumpstation_map",
-        ]
-    )
+    # # Clear schematisation geopackage (OPTIONAL)
+    # clear_gpkg(
+    #     gpkg=target_gpkg,
+    #     layers_to_clear=[
+    #         "connection_node",
+    #         "channel",
+    #         "cross_section_location",
+    #         "culvert",
+    #         "orifice",
+    #         "weir",
+    #         "pumpstation",
+    #         "pumpstation_map",
+    #     ]
+    # )
 
-    # Export DFlowFM data to 3Di
-    dflowfm2threedi(
-        target_gpkg=target_gpkg,
-        mdu_path=mdu_path,
-        network_file_path=network_file_path,
-        cross_section_locations_path=cross_section_locations_path,
-        cross_def_path=cross_def_path,
-        structures_path=structures_path,
-    )
+    # # Export DFlowFM data to 3Di
+    # dflowfm2threedi(
+    #     target_gpkg=target_gpkg,
+    #     mdu_path=mdu_path,
+    #     network_file_path=network_file_path,
+    #     cross_section_locations_path=cross_section_locations_path,
+    #     cross_def_path=cross_def_path,
+    #     structures_path=structures_path,
+    # )
 
     ##############################################################
     # BEFORE CONTINUING, RUN ALL THE VECTOR DATA IMPORTERS FIRST #
