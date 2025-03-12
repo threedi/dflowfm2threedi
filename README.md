@@ -138,6 +138,10 @@ Do the following:
         select connection_node_start_id as id from orifice where connection_node_start_id != connection_node_end_id
         union
         select connection_node_end_id as id from orifice where connection_node_start_id != connection_node_end_id
+		union
+        select connection_node_start_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+        union
+        select connection_node_end_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
     )
     SELECT DISTINCT culvert.* 
     FROM culvert
@@ -161,9 +165,40 @@ Do the following:
             select connection_node_start_id as id from culvert where connection_node_start_id != connection_node_end_id
             union
             select connection_node_end_id as id from culvert where connection_node_start_id != connection_node_end_id
+			union
+			select connection_node_start_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+			union
+			select connection_node_end_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
         )
     SELECT DISTINCT orifice.* 
     FROM orifice
+    where 
+        connection_node_start_id not in (select id from cono_ids)
+        or
+        connection_node_end_id not in (select id from cono_ids)
+    ;
+
+**Weirs**
+
+    with cono_ids as (
+            select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_start_id as id from orifice where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from orifice where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_start_id as id from culvert where connection_node_start_id != connection_node_end_id
+            union
+            select connection_node_end_id as id from culvert where connection_node_start_id != connection_node_end_id
+			union
+			select connection_node_start_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+			union
+			select connection_node_end_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+        )
+    SELECT DISTINCT weir.* 
+    FROM weir
     where 
         connection_node_start_id not in (select id from cono_ids)
         or
