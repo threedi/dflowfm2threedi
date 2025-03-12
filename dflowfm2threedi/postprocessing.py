@@ -28,14 +28,15 @@ ALL_OBJECTS = NETWORK_OBJECTS + MAPPING_OBJECTS + POINT_OBJECTS
 
 
 class ShortChannelDeleter:
-    def __init__(self, gpkg: Path, threshold: float):
-        self.data_source = ogr.Open(gpkg, 1)
+    def __init__(self, gpkg: str | Path, threshold: float):
+        self.data_source = ogr.Open(str(gpkg), 1)
         self.short_channels = self._get_short_channels(threshold=threshold)
         self.indices = {
             layer_name: self._create_index(layer_name) for layer_name in ALL_OBJECTS
         }
         self.reference_dict = dict()
         self._update_reference_dict(self.short_channels)
+        self._replaced_connection_nodes = dict()
 
     def _update_reference_dict(self, channels: List):
         for channel in channels:
@@ -80,6 +81,12 @@ class ShortChannelDeleter:
                     index[connection_node_id] = {(connection_node_field, feature)}
         return index
 
+    def replaced_connection_node_id(self, old_connection_node_id: int):
+        current_id = old_connection_node_id
+        while current_id in self._replaced_connection_nodes:
+            current_id = self._replaced_connection_nodes[current_id]
+        return current_id
+
     def get_referencing_features(self, channel_id, connection_node_id, target_object_types: List = None) -> List:
         """
         Returns list of (layer_name, field_name, feature) tuples
@@ -114,14 +121,15 @@ class ShortChannelDeleter:
 
         # Find out which connection node has the least connections with:
         if len(references["start"]) > len(references["end"]):
-            connection_node_id_to_delete = "connection_node_end_id"
-            connection_node_id_replacement = "connection_node_start_id"
+            connection_node_id_to_delete = channel["connection_node_end_id"]
+            connection_node_id_replacement = channel["connection_node_start_id"]
         else:
-            connection_node_id_to_delete = "connection_node_start_id"
-            connection_node_id_replacement = "connection_node_end_id"
+            connection_node_id_to_delete = channel["connection_node_start_id"]
+            connection_node_id_replacement = channel["connection_node_end_id"]
+        connection_node_id_replacement = self.replaced_connection_node_id(connection_node_id_replacement)
         referencing_features = self.get_referencing_features(
             channel_id=channel_id,
-            connection_node_id=channel[connection_node_id_to_delete],
+            connection_node_id=connection_node_id_to_delete,
             target_object_types=ALL_OBJECTS
         )
         # Update all referencing features
@@ -130,8 +138,8 @@ class ShortChannelDeleter:
                 data_source=self.data_source,
                 layer_name=layer_name,
                 feature_fid=feature.GetFID(),
-                delete_id=channel[connection_node_id_to_delete],
-                replacement_id=channel[connection_node_id_replacement],
+                delete_id=connection_node_id_to_delete,
+                replacement_id=connection_node_id_replacement,
             )
             if layer_name == "channel":
                 self._update_reference_dict(channels=[feature])
@@ -144,9 +152,10 @@ class ShortChannelDeleter:
 
         # Delete the connection node
         connection_nodes = self.data_source.GetLayerByName("connection_node")
-        connection_nodes.SetAttributeFilter(f"id = {channel[connection_node_id_to_delete]}")
+        connection_nodes.SetAttributeFilter(f"id = {connection_node_id_to_delete}")
         for connection_node in connection_nodes:
             connection_nodes.DeleteFeature(connection_node.GetFID())
+        self._replaced_connection_nodes[connection_node_id_to_delete] = connection_node_id_replacement
 
         # Delete the channel
         channels = self.data_source.GetLayerByName("channel")
@@ -180,11 +189,15 @@ class ShortChannelDeleter:
             )
         feature.SetField(field_to_be_updated, replacement_id)  # Replace with the new value
         target_geom = feature.GetGeometryRef()
+        geom_name = target_geom.GetGeometryName()
+        geom_type = target_geom.GetGeometryType()
         connection_node_layer = data_source.GetLayerByName("connection_node")
         connection_node_layer.SetAttributeFilter(f"id={replacement_id}")
         replacement_connection_node = connection_node_layer.GetNextFeature()
         vertex_geom = replacement_connection_node.GetGeometryRef()
         move_vertex_in_geometry(target_geom=target_geom, new_vertex=vertex_geom, first_or_last=first_or_last)
+        geom_name = target_geom.GetGeometryName()
+        geom_type = target_geom.GetGeometryType()
         feature.SetGeometry(target_geom)
 
         # Save changes to the layer
@@ -258,10 +271,20 @@ def move_vertex_in_geometry(target_geom, new_vertex, first_or_last: str):
     new_x, new_y = new_vertex.GetX(), new_vertex.GetY()
     num_vertices = target_geom.GetPointCount()
     index = 0 if first_or_last == "first" else num_vertices - 1
-    target_geom.SetPoint(index, new_x, new_y)
+
+    if target_geom.GetCoordinateDimension() == 3:
+        # Preserve Z only if original geometry is 3D
+        new_z = new_vertex.GetZ() if new_vertex.GetCoordinateDimension() == 3 else 0
+        target_geom.SetPoint(index, new_x, new_y, new_z)  # Use Z-coordinate
+    else:
+        target_geom.SetPoint_2D(index, new_x, new_y)  # Force 2D output
 
 
 if __name__ == "__main__":
-    scd = ShortChannelDeleter(r"C:\Users\leendert.vanwolfswin\Downloads\Stroink13.gpkg", threshold=5)
+    scd = ShortChannelDeleter(
+        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Stroink\work in progress\schematisation\Stroink.gpkg",
+        threshold=5
+    )
     scd.run()
-    print("Klaar")
+    print("Done! If you have this schematisation open in the 3Di Modeller Interface, please remove it from the project "
+          "and load it again.")
