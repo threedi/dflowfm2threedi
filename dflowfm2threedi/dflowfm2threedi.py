@@ -6,6 +6,7 @@ from pprint import pprint
 from types import NoneType
 from typing import Dict, List, Type, Optional, Tuple, Callable
 
+import numpy as np
 from hydrolib.core.dflowfm import (
     CrossLocModel,
     StructureModel,
@@ -27,7 +28,8 @@ from shapely.geometry import LineString
 
 from hydrolib_utils import check_structures, read_friction, read_cross_sections, ThreeDiCrossSectionData, \
     ThreeDiFrictionData, \
-    BranchFrictionDefinition, count_structure_types, GlobalFrictionDefinition, GenericFrictionDefinition
+    BranchFrictionDefinition, count_structure_types, GlobalFrictionDefinition, GenericFrictionDefinition, lists_to_csv, \
+    CrossSectionShape
 
 ogr.UseExceptions()
 
@@ -487,6 +489,18 @@ def import_structures(
                 feature_type=feature_type,
             )
 
+        if feature_type == 'universalweir':
+            y_values = [float(val) for val in src_feat["yvalues"].split(",")]
+            z_values = list(
+                np.round(
+                    np.array([float(val) for val in src_feat["zvalues"].split(",")]) - src_feat["crestlevel"],
+                    4
+                )
+            )
+
+            dst_feat.SetField("cross_section_shape", CrossSectionShape.YZ.value)
+            dst_feat.SetField("cross_section_table", lists_to_csv([y_values, z_values]))
+
         gpkg_layer.CreateFeature(dst_feat)
         dst_feat = None  # Free memory
 
@@ -922,7 +936,7 @@ if __name__ == "__main__":
     )
 
     for structure_type in [
-        Bridge,
+        UniversalWeir,
     ]:
 
         extracted_data, field_definitions = extract_from_ini(
