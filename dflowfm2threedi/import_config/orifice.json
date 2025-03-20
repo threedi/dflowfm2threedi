@@ -81,8 +81,9 @@
       "source_attribute": "crestwidth"
     },
     "cross_section_height": {
-      "method": "source_attribute",
-      "source_attribute": "gateloweredgelevel"
+      "method": "expression",
+      "source_attribute": "gateloweredgelevel",
+      "expression": "ROUND( \"gateloweredgelevel\" - \"crestlevel\" ,3)"
     },
     "cross_section_table": {
       "method": "ignore",
