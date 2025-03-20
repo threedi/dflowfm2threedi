@@ -7,7 +7,8 @@ from enum import Enum
 from typing import List, Optional, Dict, Type, SupportsRound, Tuple
 from pathlib import Path
 
-from hydrolib.core.dflowfm import Weir, Culvert, Orifice, FlowDirection, Structure, StructureModel, Compound
+from hydrolib.core.dflowfm import Weir, Culvert, Orifice, FlowDirection, Structure, StructureModel, Compound, Pump, \
+    Bridge
 from hydrolib.core.dflowfm.crosssection.models import (
     CircleCrsDef,
     CrossDefModel,
@@ -24,6 +25,8 @@ from hydrolib.core.dflowfm.friction.models import (
 )
 
 import numpy as np
+
+ASSUMED_WATER_DEPTH = 1
 
 
 class CrossSectionShape(Enum):
@@ -82,13 +85,26 @@ class ThreeDiCrossSectionData:
         self.cross_section_table = cross_section_table
         self.friction_data = friction_data
 
-    @property
-    def is_valid(self):
-        result = True
+    def _parse_cross_section_table(self) -> Tuple[List, List] | Tuple[None, None]:
+        """Returns the columns in a csv-style table as lists of float"""
         if self.cross_section_shape in TABLE_SHAPES and self.cross_section_table:
             parsed_table = [row.split(",") for row in self.cross_section_table.split("\n")]
             height_values, width_values = list(zip(*parsed_table))
-        return result
+            return height_values, width_values
+        else:
+            return None, None
+
+    @property
+    def is_valid(self):
+        self._parse_cross_section_table()  # if not valid, this will raise an exception
+        return True
+
+    def shift_down(self, shift: float):
+        values = list(self._parse_cross_section_table())
+        if values != (None, None):
+            z_column_idx = 1 if self.cross_section_shape == CrossSectionShape.YZ else 0
+            values[z_column_idx] = list(np.round(np.array(values[z_column_idx]).astype(float) - shift, 4))
+            self.cross_section_table = lists_to_csv([values[0], values[1]])
 
 
 @dataclass
@@ -113,9 +129,6 @@ class GenericFrictionDefinition:
             invalid_reason: Optional[str] = None
     ):
         """
-        If friction_type or friction_value are None,
-        it tries to obtain them from the provided friction_definitions
-
         Sets ``self.is_valid`` and ``self.invalid_reason`` to track validity without raising exceptions yet, to prevent exceptions
         on data that is not eventually used in the export
 
@@ -150,6 +163,10 @@ class GenericFrictionDefinition:
                 friction_type = ThreeDiFrictionType.MANNING
                 friction_value = np.round(self.friction_value ** (1 / 6) / 21.1, 4)  # this is far from perfect
                 # but gives a good approx.
+            elif self.friction_type == DHydroFrictionType.debosbijkerk:
+                friction_type = ThreeDiFrictionType.MANNING
+                friction_value = np.round(1/(self.friction_value * ASSUMED_WATER_DEPTH ** (1 / 3)), 4)  # this
+                # is far from perfect but gives a good approx.
             elif self.friction_type is None:
                 friction_type = ThreeDiFrictionType.NONE
                 friction_value = None
@@ -250,21 +267,6 @@ def lists_to_csv(columns: List[List[float]], decimals=None) -> str:
         writer.writerow(row)
 
     return output.getvalue().rstrip("\n")
-
-
-# def friction_definition_for_cross_section(
-#         cross_section_definition: CrossSectionDefinition,
-#         global_friction_definitions: Dict[str, FrictionData],
-#         branch_friction_definitions: Dict[str, List[BranchFrictionData]],
-# ):
-#     try:
-#         friction_definition = branch_friction_definitions[cross_section_definition.branchid]
-# # Get or create a FrictionData object
-#     # Try to get it from Branch friction definitions
-#     # Try to get it from Global friction definitions
-#     # Create it
-
-# Overwrite the type and value with data from the cross-section
 
 
 def cross_section_def2threedi(
@@ -462,7 +464,7 @@ def count_structure_types(structures_path: Path) -> Dict[Type[Structure], int]:
 def check_structures(path: Path):
     structure_counts = count_structure_types(path)
     for structure_type, count in structure_counts.items():
-        if structure_type not in (Weir, Culvert, Orifice, Compound):
+        if structure_type not in (Bridge, Weir, Culvert, Orifice, Compound, Pump):
             warnings.warn(
                 f"Source data contains {count} structures of type {structure_type.__name__}, which are not supported!"
             )
@@ -504,50 +506,52 @@ if __name__ == "__main__":
 
     mdu = configparser.ConfigParser()
     mdu.read(mdu_path)
-    frict_files = mdu["geometry"]["FrictFile"].split(";")
-    friction_definitions_dict = dict()
-    branch_friction_definitions_dict = dict()
-    for frict_file in frict_files:
-        friction_path = mdu_path.parent / frict_file
-        friction_definitions = FrictionModel(friction_path)
-        # get friction definitions from global entries
-        for friction_definition in friction_definitions.global_:
-            friction_definitions_dict[friction_definition.frictionid] = GlobalFrictionDefinition(
-                friction_id=friction_definition.frictionid,
-                friction_type=DHydroFrictionType(friction_definition.frictiontype) if
-                friction_definition.frictiontype else None,
-                friction_value=friction_definition.frictionvalue
-            )
-
-        for friction_definition in friction_definitions.branch:
-            if not friction_definition.chainage:
-                no_chainage.append(friction_definition)
-                continue
-
-            if friction_definition.functiontype.lower() != 'constant':
-                warnings.warn(
-                    f"Friction definition with a function type other than 'constant' are not supported. "
-                    f"Function type: {friction_definition.functiontype}. "
-                    f"Branch ID: {friction_definition.branchid}. "
-                    f"Chainage: {friction_definition.chainage}."
-                )
-
-            friction_definitions_for_this_branch = []
-            for i, chainage in enumerate(friction_definition.chainage):
-                branch_friction_definition = BranchFrictionDefinition(
-                    branch_id=friction_definition.branchid,
-                    chainage=chainage,
-                    friction_type=DHydroFrictionType(friction_definition.frictiontype) if
-                    friction_definition.frictiontype else None,
-                    friction_value=friction_definition.frictionvalues[i]
-                )
-                friction_definitions_for_this_branch.append(branch_friction_definition)
-            branch_friction_definitions_dict[friction_definition.branchid] = friction_definitions_for_this_branch
-
-    a = branch_friction_definitions_dict["W4890"]
+    # frict_files = mdu["geometry"]["FrictFile"].split(";")
+    # friction_definitions_dict = dict()
+    # branch_friction_definitions_dict = dict()
+    # for frict_file in frict_files:
+    #     friction_path = mdu_path.parent / frict_file
+    #     friction_definitions = FrictionModel(friction_path)
+    #     # get friction definitions from global entries
+    #     for friction_definition in friction_definitions.global_:
+    #         friction_definitions_dict[friction_definition.frictionid] = GlobalFrictionDefinition(
+    #             friction_id=friction_definition.frictionid,
+    #             friction_type=DHydroFrictionType(friction_definition.frictiontype) if
+    #             friction_definition.frictiontype else None,
+    #             friction_value=friction_definition.frictionvalue
+    #         )
+    #
+    #     for friction_definition in friction_definitions.branch:
+    #         if not friction_definition.chainage:
+    #             no_chainage.append(friction_definition)
+    #             continue
+    #
+    #         if friction_definition.functiontype.lower() != 'constant':
+    #             warnings.warn(
+    #                 f"Friction definition with a function type other than 'constant' are not supported. "
+    #                 f"Function type: {friction_definition.functiontype}. "
+    #                 f"Branch ID: {friction_definition.branchid}. "
+    #                 f"Chainage: {friction_definition.chainage}."
+    #             )
+    #
+    #         friction_definitions_for_this_branch = []
+    #         for i, chainage in enumerate(friction_definition.chainage):
+    #             branch_friction_definition = BranchFrictionDefinition(
+    #                 branch_id=friction_definition.branchid,
+    #                 chainage=chainage,
+    #                 friction_type=DHydroFrictionType(friction_definition.frictiontype) if
+    #                 friction_definition.frictiontype else None,
+    #                 friction_value=friction_definition.frictionvalues[i]
+    #             )
+    #             friction_definitions_for_this_branch.append(branch_friction_definition)
+    #         branch_friction_definitions_dict[friction_definition.branchid] = friction_definitions_for_this_branch
+    #
+    # a = branch_friction_definitions_dict["W4890"]
 
     structures_path = flow_fm_input_path / "structures.ini"
     s = StructureModel(structures_path)
-    orifices = [struct for struct in s.structure if struct.type == "orifice"]
+    # orifices = [struct for struct in s.structure if struct.type == "orifice"]
+    compounds = [struct for struct in s.structure if struct.type == "compound"]
+    real_compounds = [c for c in compounds if c.numstructures > 1]
 
     print("Klaar")

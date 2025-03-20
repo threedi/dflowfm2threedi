@@ -52,9 +52,9 @@ This manual is based on using the following versions:
 ### Culverts
 
 It is recommended to imported D-Hydro culverts in 3 categories, based on their length:
-- < 5m: short crested orifice. Energy losses due to friction in the pipe are neglible; the weir formula that is used is fast, stable, and accurate.
-- 5 - 25 m: broad crested orifice. Energy losses due to friction in the pipe are not neglible; the weir formula that is used is fast, stable, and accurate and includes frictional losses.
-- \> 25 m: culvert. Energy losses due to friction in the pipe are not neglible; The propagation of a discharge wave through the culvert may be relevant, so multiple calculation points are used within the culvert (calculation point distance is 25 m).
+- < 5m: short crested orifice. Energy losses due to friction in the pipe are negligible; the weir formula that is used is fast, stable, and accurate.
+- 5 - 25 m: broad crested orifice. Energy losses due to friction in the pipe are not negligible; the weir formula that is used is fast, stable, and accurate and includes frictional losses.
+- \> 25 m: culvert. Energy losses due to friction in the pipe are not negligible; The propagation of a discharge wave through the culvert may be relevant, so multiple calculation points are used within the culvert (calculation point distance is 25 m).
 
 Do the following:
 - Add the layer ``dhydro_culvert`` to the project
@@ -79,6 +79,20 @@ Now you import both layers to your 3Di schematisation:
 
 **NOTE:** Schematisation Editor 1.16 contains a bug in the vector data importer. The length field is ignored, and instead the fallback value is always used. A dev version in which this bug has been fixed is available **
 **NOTE:** Schematisation Editor 1.16 contains a bug in the vector data importer. The FIDs for newly generated cross-section locations are not unique, and can therefore not be committed. A dev version in which this bug has been fixed is available **
+
+### Bridges
+
+Bridges are imported as orifices. The crest type depends on the length:
+- < 5m: short crested orifice. Energy losses due to friction under the bridge are negligible; the weir formula that is used is fast, stable, and accurate.
+- \> 5 - 25 m: broad crested orifice. Energy losses due to friction under the bridge are not negligible; the weir formula that is used is fast, stable, and accurate and includes frictional losses.
+
+Do the following:
+- Add the layer ``dhydro_bridge`` to the project
+- In the 3Di Schematisation Editor toolbar, click "Import schematisation objects" > Orifices
+- As Source culvert layer, choose ``dhydro_bridge``
+- Load template > ``bridge.json``
+- Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
+- Run
 
 ### Orifices
 
@@ -257,6 +271,10 @@ The following logic is applied:
         friction_type = ThreeDiFrictionType.MANNING
         friction_value = np.round(self.friction_value ** (1 / 6) / 21.1, 4)  # this is far from perfect
         # but gives a good approx.
+    elif self.friction_type == DHydroFrictionType.debosbijkerk:
+        friction_type = ThreeDiFrictionType.MANNING
+        friction_value = np.round(1/(self.friction_value * ASSUMED_WATER_DEPTH ** (1 / 3)), 4)  # this
+        # is far from perfect but gives a good approx. ASSUMED_WATER_DEPTH = 1
     elif self.friction_type is None:
         friction_type = ThreeDiFrictionType.NONE
         friction_value = None
@@ -280,4 +298,12 @@ crsloc.ini -> crosssection -> 8862 -> __root__
 ```
 
 To fix this: look for the keyword (in this case 'name') in the file crsloc and delete the line.
+
+You can delete all such lines using regex-find and replace in Notepad++.
+
+- Find what: `^\s*name\s*=.*\r?\n?`
+- Replace with: *leave empty*
+- Check the "wrap around" checkbox
+- Search mode: regular expression
+- Replace all
 

@@ -2,18 +2,32 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from pprint import pprint
 from types import NoneType
 from typing import Dict, List, Type, Optional, Tuple, Callable
 
-from hydrolib.core.dflowfm import CrossLocModel, StructureModel, CrossSection, Culvert, Structure, Orifice, Weir, Pump
+from hydrolib.core.dflowfm import (
+    CrossLocModel,
+    StructureModel,
+    CrossSection,
+    Culvert,
+    Structure,
+    Orifice,
+    Weir,
+    Pump,
+    Bridge,
+    UniversalWeir
+)
+
 from hydrolib.core.dflowfm.ini.models import INIBasedModel
 from netCDF4 import Dataset
 from osgeo import ogr, osr
 from shapely import Point
 from shapely.geometry import LineString
 
-from hydrolib_utils import read_friction, read_cross_sections, ThreeDiCrossSectionData, ThreeDiFrictionData, \
-    BranchFrictionDefinition
+from hydrolib_utils import check_structures, read_friction, read_cross_sections, ThreeDiCrossSectionData, \
+    ThreeDiFrictionData, \
+    BranchFrictionDefinition, count_structure_types, GlobalFrictionDefinition, GenericFrictionDefinition
 
 ogr.UseExceptions()
 
@@ -451,15 +465,27 @@ def import_structures(
                 dst_feat.SetField(field_index, value)
 
         # data from cross-section definitions
-        try:
-            cross_section_definition = cross_section_data[src_feat["id"]]
+        src_feat_id = src_feat["id"]
+
+        if src_feat_id in cross_section_data:
+            cross_section_definition = cross_section_data[src_feat_id]
+            if feature_type == 'culvert':
+                cross_section_definition.friction_data = GenericFrictionDefinition(
+                    friction_type=src_feat["bedfrictiontype"],
+                    friction_value=src_feat["bedfriction"],
+                ).to_threedi()
+            elif feature_type == 'bridge':
+                cross_section_definition.friction_data = GenericFrictionDefinition(
+                    friction_type=src_feat["frictiontype"],
+                    friction_value=src_feat["friction"],
+                ).to_threedi()
+                cross_section_definition.shift_down(src_feat["shift"])
+                cross_section_definition.reference_level = src_feat["shift"]
             add_cross_section_data_to_feature(
                 cross_section_definition=cross_section_definition,
                 feature=dst_feat,
                 feature_type=feature_type,
             )
-        except KeyError:
-            pass
 
         gpkg_layer.CreateFeature(dst_feat)
         dst_feat = None  # Free memory
@@ -515,9 +541,9 @@ def add_cross_section_data_to_feature(
             if feature[attribute] is None and new_value is not None:
                 feature.SetField(attribute, new_value)
     else:
-        print(
+        warnings.warn(
             f"Friction data for {feature_type} with ID {feature['id']} is not valid. "
-            f"Reason: {cross_section_definition.friction_data.invalid_reason})"
+            f"Reason: {cross_section_definition.friction_data.invalid_reason}"
         )
 
 
@@ -746,26 +772,30 @@ def dflowfm2threedi(
         cross_def_path: Path,
         structures_path: Path,
 ):
+    print("Extracting nodes...")
     nodes = extract_nodes(network_file=network_file_path)
+    print("Importing connection nodes...")
     connection_node_name_id_mapping = import_to_threedi_layer(
         source=nodes,
         target=target_gpkg,
         layer_mapping=connection_node_layer_mapping
     )
-
+    print("Extracting branches...")
     branches = extract_branches(network_file=network_file_path)
+    print("Importing channels...")
     channel_name_id_mapping = import_to_threedi_layer(
         source=branches,
         target=target_gpkg,
         layer_mapping=channel_layer_mapping,
         input_name_id_mapping=connection_node_name_id_mapping
     )
-
+    print("Extracting cross-section locations...")
     cross_section_locations, cross_loc_field_definitions = extract_from_ini(
         ini_file=cross_section_locations_path,
         object_type=CrossSection,
         branches=branches
     )
+    print("Importing cross-section locations...")
     cross_section_id_mapping = import_to_threedi_layer(
         source=cross_section_locations,
         target=target_gpkg,
@@ -774,8 +804,9 @@ def dflowfm2threedi(
     )
 
     # Get cross-section definitions
+    print("Reading friction definitions...")
     friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
-
+    print("Reading cross-section definitions...")
     cross_section_definitions: Dict[str, ThreeDiCrossSectionData] = read_cross_sections(
     # ThreeDiCrossSectionData.friction_data: ThreeDiFrictionData
         cross_def_path=cross_def_path,
@@ -783,6 +814,7 @@ def dflowfm2threedi(
     )
 
     # enrich cross_section_definitions with branch friction data
+    print("Adding branch friction data to cross-section definitions...")
     cross_section_definitions = {
         id: enrich_cross_section_definition(
             cross_section_definition,
@@ -797,6 +829,7 @@ def dflowfm2threedi(
         cross_section_locations=cross_section_locations
     )
 
+    print("Enriching cross-section locations with cross-section definitions and friction data...")
     enrich_cross_section_locations(
         cross_section_data=cross_section_definitions,
         gpkg=target_gpkg,
@@ -808,13 +841,15 @@ def dflowfm2threedi(
         Orifice,
         Weir,
         Pump,
+        Bridge,
     ]:
-
+        print(f"Extracting {structure_type.__name__.lower()}s...")
         extracted_data, field_definitions = extract_from_ini(
             ini_file=structures_path,
             object_type=structure_type,
             branches=branches
         )
+        print(f"Importing {structure_type.__name__.lower()}s...")
         import_structures(
                 source=extracted_data,
                 epsg_code=28992,
@@ -823,6 +858,8 @@ def dflowfm2threedi(
                 field_definitions=field_definitions,
                 feature_type=structure_type.__name__.lower()
         )
+    pprint(count_structure_types(structures_path))
+    check_structures(structures_path)
 
 
 def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
@@ -863,7 +900,7 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
 
 
 if __name__ == "__main__":
-    dsproj_data_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337def_case4.dsproj_data")
+    dsproj_data_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\Vechtstromen Zuid\Vechtstromen Zuid.dsproj_data")
     flow_fm_input_path = dsproj_data_dir / "FlowFM" / "input"
     network_file_path = flow_fm_input_path / "FlowFM_net.nc"
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
@@ -872,8 +909,36 @@ if __name__ == "__main__":
     structures_path = flow_fm_input_path / "structures.ini"
 
     target_gpkg = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Stroink\work in progress\schematisation\Stroink.gpkg"
+        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Vechtstromen Zuid v2\work in progress\schematisation\Vechtstromen Zuid v2.gpkg"
     )
+
+    # TESTING
+    branches = extract_branches(network_file=network_file_path)
+    friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
+    cross_section_definitions: Dict[str, ThreeDiCrossSectionData] = read_cross_sections(
+    # ThreeDiCrossSectionData.friction_data: ThreeDiFrictionData
+        cross_def_path=cross_def_path,
+        global_friction_definitions=friction_definitions
+    )
+
+    for structure_type in [
+        Bridge,
+    ]:
+
+        extracted_data, field_definitions = extract_from_ini(
+            ini_file=structures_path,
+            object_type=structure_type,
+            branches=branches
+        )
+        import_structures(
+                source=extracted_data,
+                epsg_code=28992,
+                target=target_gpkg,
+                cross_section_data=cross_section_definitions,
+                field_definitions=field_definitions,
+                feature_type=structure_type.__name__.lower()
+        )
+
 
     # # Clear schematisation geopackage (OPTIONAL)
     # clear_gpkg(
@@ -889,7 +954,7 @@ if __name__ == "__main__":
     #         "pumpstation_map",
     #     ]
     # )
-
+    #
     # # Export DFlowFM data to 3Di
     # dflowfm2threedi(
     #     target_gpkg=target_gpkg,
