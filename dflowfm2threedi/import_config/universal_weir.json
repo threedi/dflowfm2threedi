@@ -1,11 +1,11 @@
 {
-  "target_layer": "culvert",
+  "target_layer": "weir",
   "conversion_settings": {
     "use_snapping": true,
     "snapping_distance": 0.1,
     "create_connection_nodes": true,
     "create_manholes": true,
-    "length_source_field": "length",
+    "length_source_field": "",
     "length_fallback_value": 1.0,
     "azimuth_source_field": "",
     "azimuth_fallback_value": 90,
@@ -23,44 +23,46 @@
     "display_name": {
       "method": "expression",
       "source_attribute": "",
-      "expression": "'Culvert '||id"
+      "expression": "'Universal weir '||id"
     },
-    "calculation_type": {
+    "crest_level": {
+      "method": "source_attribute",
+      "source_attribute": "crestlevel"
+    },
+    "crest_type": {
       "method": "default",
       "source_attribute": "",
-      "default_value": 101
-    },
-    "dist_calc_points": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 25.0
-    },
-    "invert_level_start_point": {
-      "method": "source_attribute",
-      "source_attribute": "leftlevel"
-    },
-    "invert_level_end_point": {
-      "method": "source_attribute",
-      "source_attribute": "rightlevel"
+      "default_value": 4,
+      "expression": "-- 3:  /*Broad crested*/\r\n-- 4:  /*Short crested*/\r\n\r\nCASE WHEN \"CrestWidth\" >= 5 THEN 3 \r\n     WHEN \"CrestWidth\" < 5 THEN 4 \r\n\t ELSE 3 \r\nEND\r\n\r\n-- ELSE: CrestWidth IS NULL\r\n"
     },
     "discharge_coefficient_positive": {
       "method": "expression",
       "source_attribute": "",
-      "expression": "CASE \r\n\tWHEN  \"allowedflowdir\" in ('both', 'positive') THEN  \"inletlosscoeff\" *   \"outletlosscoeff\" \r\n\tWHEN \"allowedflowdir\" in ('none', 'negative') THEN 0 \r\nEND"
+      "expression": "CASE \r\n\tWHEN \"allowedflowdir\"  in ('both', 'positive') THEN  \"corrcoeff\" \r\n\tWHEN \"allowedflowdir\"  in ('none', 'negative') THEN  0\r\nEND\r\n"
     },
     "discharge_coefficient_negative": {
       "method": "expression",
       "source_attribute": "",
-      "expression": "CASE \r\n\tWHEN  \"allowedflowdir\" in ('both', 'negative') THEN  \"inletlosscoeff\" *   \"outletlosscoeff\" \r\n\tWHEN \"allowedflowdir\" in ('none', 'positive') THEN 0 \r\nEND"
+      "expression": "CASE \r\n\tWHEN \"allowedflowdir\"  in ('both', 'negative') THEN  \"corrcoeff\" \r\n\tWHEN \"allowedflowdir\"  in ('none', 'positive') THEN  0\r\nEND\r\n"
     },
     "friction_value": {
-      "method": "source_attribute",
+      "method": "ignore",
       "source_attribute": "friction_value"
     },
     "friction_type": {
-      "method": "source_attribute",
+      "method": "ignore",
       "source_attribute": "friction_type",
       "default_value": 2
+    },
+    "sewerage": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": false
+    },
+    "external": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": false
     },
     "zoom_category": {
       "method": "default",
@@ -76,16 +78,16 @@
       "source_attribute": ""
     },
     "cross_section_shape": {
-      "method": "source_attribute",
+      "method": "default",
       "source_attribute": "cross_section_shape",
-      "default_value": "NULL"
+      "default_value": 7
     },
     "cross_section_width": {
-      "method": "source_attribute",
+      "method": "ignore",
       "source_attribute": "cross_section_width"
     },
     "cross_section_height": {
-      "method": "source_attribute",
+      "method": "ignore",
       "source_attribute": "cross_section_height"
     },
     "cross_section_table": {
@@ -101,7 +103,7 @@
     "code": {
       "method": "expression",
       "source_attribute": "",
-      "expression": "'Culvert '||\"id\""
+      "expression": "'Universal weir '||\"id\""
     },
     "initial_waterlevel": {
       "method": "ignore",
@@ -121,11 +123,12 @@
     "code": {
       "method": "expression",
       "source_attribute": "",
-      "expression": "'Culvert '||\"id\""
+      "expression": "'Universal weir '||\"id\""
     },
     "display_name": {
       "method": "ignore",
-      "source_attribute": ""
+      "source_attribute": "",
+      "expression": "'Orifice '||\"LongName\""
     },
     "calculation_type": {
       "method": "default",

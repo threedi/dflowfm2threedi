@@ -22,8 +22,9 @@
       "expression": "'Pump '||id"
     },
     "display_name": {
-      "method": "ignore",
-      "source_attribute": ""
+      "method": "expression",
+      "source_attribute": "",
+      "expression": "'Pump '||id"
     },
     "crest_level": {
       "method": "ignore",

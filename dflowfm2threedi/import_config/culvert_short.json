@@ -21,8 +21,9 @@
       "source_attribute": "id"
     },
     "display_name": {
-      "method": "ignore",
-      "source_attribute": ""
+      "method": "expression",
+      "source_attribute": "",
+      "expression": "'Culvert '||id"
     },
     "crest_level": {
       "method": "expression",

@@ -21,8 +21,9 @@
       "source_attribute": "id"
     },
     "display_name": {
-      "method": "ignore",
-      "source_attribute": ""
+      "method": "expression",
+      "source_attribute": "",
+      "expression": "'Weir '||id"
     },
     "crest_level": {
       "method": "source_attribute",
