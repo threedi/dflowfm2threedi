@@ -307,3 +307,14 @@ You can delete all such lines using regex-find and replace in Notepad++.
 - Search mode: regular expression
 - Replace all
 
+### configparser.MissingSectionHeaderError: File contains no section headers.
+
+Example: 
+
+```
+configparser.MissingSectionHeaderError: File contains no section headers.
+file: WindowsPath('C:/Temp/MyModel/FlowFM/input/FlowFM.mdu'), line: 2
+'*\n'
+```
+
+To fix this: open the .mdu file in a text editor and add a `#` before the line that gives the error because it only contains `*` (line 2 in this example), save the file and try again

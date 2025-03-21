@@ -158,28 +158,30 @@ def extract_branches(network_file: Path) -> Dict:
 
     """
     f = Dataset(network_file)
+    keys = {key.lower(): key for key in f.variables.keys()}  # some files have keys with first letter capitalized,
+                                                             # others all lower key
 
     # Extract branch IDs
-    branch_ids = ["".join(b).strip() for b in f.variables['Network_branch_id'][:].astype(str)]
-    branch_long_names = ["".join(b).strip() for b in f.variables['Network_branch_long_name'][:].astype(str)]
+    branch_ids = ["".join(b).strip() for b in f.variables[keys['network_branch_id']][:].astype(str)]
+    branch_long_names = ["".join(b).strip() for b in f.variables[keys['network_branch_long_name']][:].astype(str)]
 
     # Extract branch attributes
-    branch_lengths = f.variables['Network_edge_length'][:]
-    branch_orders = f.variables['Network_branch_order'][:]
-    branch_types = f.variables['Network_branch_type'][:]
+    branch_lengths = f.variables[keys['network_edge_length']][:]
+    branch_orders = f.variables[keys['network_branch_order']][:]
+    branch_types = f.variables[keys['network_branch_type']][:]
 
     # Extract node IDs
-    node_ids = ["".join(n).strip() for n in f.variables['Network_node_id'][:].astype(str)]
+    node_ids = ["".join(n).strip() for n in f.variables[keys['network_node_id']][:].astype(str)]
 
     # Extract geometry node counts per branch
-    geom_node_counts = f.variables['Network_geom_node_count'][:]
+    geom_node_counts = f.variables[keys['network_geom_node_count']][:]
 
     # Extract geometry node coordinates
-    geom_x = f.variables['Network_geom_x'][:]
-    geom_y = f.variables['Network_geom_y'][:]
+    geom_x = f.variables[keys['network_geom_x']][:]
+    geom_y = f.variables[keys['network_geom_y']][:]
 
     # Extract edge-node indices (for start and end nodes)
-    edge_nodes = f.variables['Network_edge_nodes'][:]  # (nEdges, 2)
+    edge_nodes = f.variables[keys['network_edge_nodes']][:]  # (nEdges, 2)
 
     # List to store branch geometries and their source/target nodes
     branch_geometries = []
@@ -233,16 +235,18 @@ def extract_nodes(network_file: Path) -> Dict:
     - geometry: Linestring
     """
     f = Dataset(network_file)
+    keys = {key.lower(): key for key in f.variables.keys()}  # some files have keys with first letter capitalized,
+                                                             # others all lower key
 
     # Extract node IDs (convert from byte strings to normal strings)
-    node_ids = ["".join(n).strip() for n in f.variables['Network_node_id'][:].astype(str)]
+    node_ids = ["".join(n).strip() for n in f.variables[keys['network_node_id']][:].astype(str)]
 
     # Extract node coordinates
-    node_x = f.variables['Network_node_x'][:]
-    node_y = f.variables['Network_node_y'][:]
+    node_x = f.variables[keys['network_node_x']][:]
+    node_y = f.variables[keys['network_node_y']][:]
 
     # (Optional) Extract long names if needed
-    node_long_names = ["".join(n).strip() for n in f.variables['Network_node_long_name'][:].astype(str)]
+    node_long_names = ["".join(n).strip() for n in f.variables[keys['network_node_long_name']][:].astype(str)]
 
     node_geometries = [Point(x, y) for x, y in zip(node_x, node_y)]
 
@@ -785,70 +789,73 @@ def dflowfm2threedi(
         cross_section_locations_path: Path,
         cross_def_path: Path,
         structures_path: Path,
+        skip_branches: bool = False,
 ):
-    print("Extracting nodes...")
-    nodes = extract_nodes(network_file=network_file_path)
-    print("Importing connection nodes...")
-    connection_node_name_id_mapping = import_to_threedi_layer(
-        source=nodes,
-        target=target_gpkg,
-        layer_mapping=connection_node_layer_mapping
-    )
+    if not skip_branches:
+        print("Extracting nodes...")
+        nodes = extract_nodes(network_file=network_file_path)
+        print("Importing connection nodes...")
+        connection_node_name_id_mapping = import_to_threedi_layer(
+            source=nodes,
+            target=target_gpkg,
+            layer_mapping=connection_node_layer_mapping
+        )
     print("Extracting branches...")
     branches = extract_branches(network_file=network_file_path)
-    print("Importing channels...")
-    channel_name_id_mapping = import_to_threedi_layer(
-        source=branches,
-        target=target_gpkg,
-        layer_mapping=channel_layer_mapping,
-        input_name_id_mapping=connection_node_name_id_mapping
-    )
-    print("Extracting cross-section locations...")
-    cross_section_locations, cross_loc_field_definitions = extract_from_ini(
-        ini_file=cross_section_locations_path,
-        object_type=CrossSection,
-        branches=branches
-    )
-    print("Importing cross-section locations...")
-    cross_section_id_mapping = import_to_threedi_layer(
-        source=cross_section_locations,
-        target=target_gpkg,
-        layer_mapping=cross_section_location_mapping,
-        input_name_id_mapping=channel_name_id_mapping,
-    )
+    if not skip_branches:
+        print("Importing channels...")
+        channel_name_id_mapping = import_to_threedi_layer(
+            source=branches,
+            target=target_gpkg,
+            layer_mapping=channel_layer_mapping,
+            input_name_id_mapping=connection_node_name_id_mapping
+        )
+        print("Extracting cross-section locations...")
+        cross_section_locations, cross_loc_field_definitions = extract_from_ini(
+            ini_file=cross_section_locations_path,
+            object_type=CrossSection,
+            branches=branches
+        )
+        print("Importing cross-section locations...")
+        cross_section_id_mapping = import_to_threedi_layer(
+            source=cross_section_locations,
+            target=target_gpkg,
+            layer_mapping=cross_section_location_mapping,
+            input_name_id_mapping=channel_name_id_mapping,
+        )
 
     # Get cross-section definitions
     print("Reading friction definitions...")
     friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
     print("Reading cross-section definitions...")
     cross_section_definitions: Dict[str, ThreeDiCrossSectionData] = read_cross_sections(
-    # ThreeDiCrossSectionData.friction_data: ThreeDiFrictionData
         cross_def_path=cross_def_path,
         global_friction_definitions=friction_definitions
     )
 
-    # enrich cross_section_definitions with branch friction data
-    print("Adding branch friction data to cross-section definitions...")
-    cross_section_definitions = {
-        id: enrich_cross_section_definition(
-            cross_section_definition,
-            cross_section_locations,
-            branch_friction_definitions,
+    if not skip_branches:
+        # enrich cross_section_definitions with branch friction data
+        print("Adding branch friction data to cross-section definitions...")
+        cross_section_definitions = {
+            id: enrich_cross_section_definition(
+                cross_section_definition,
+                cross_section_locations,
+                branch_friction_definitions,
+            )
+            for id, cross_section_definition in cross_section_definitions.items()
+        }
+
+        cross_section_id_to_defname_mapping = get_cross_section_location_id_to_defname_mapping(
+            name_id_mapping=cross_section_id_mapping,
+            cross_section_locations=cross_section_locations
         )
-        for id, cross_section_definition in cross_section_definitions.items()
-    }
 
-    cross_section_id_to_defname_mapping = get_cross_section_location_id_to_defname_mapping(
-        name_id_mapping=cross_section_id_mapping,
-        cross_section_locations=cross_section_locations
-    )
-
-    print("Enriching cross-section locations with cross-section definitions and friction data...")
-    enrich_cross_section_locations(
-        cross_section_data=cross_section_definitions,
-        gpkg=target_gpkg,
-        cross_section_id_to_defname_mapping=cross_section_id_to_defname_mapping
-    )
+        print("Enriching cross-section locations with cross-section definitions and friction data...")
+        enrich_cross_section_locations(
+            cross_section_data=cross_section_definitions,
+            gpkg=target_gpkg,
+            cross_section_id_to_defname_mapping=cross_section_id_to_defname_mapping
+        )
 
     for structure_type in SUPPORTED_STRUCTURES:
         print(f"Extracting {structure_type.__name__.lower()}s...")
@@ -908,7 +915,7 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
 
 
 if __name__ == "__main__":
-    dsproj_data_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\Vechtstromen Zuid\Vechtstromen Zuid.dsproj_data")
+    dsproj_data_dir = Path(r"G:\Projecten Z (2024)\Z0252 - Bovenregionale stresstest wateroverlast OV\Gegevens\Bewerking\6_Omzetting Sobek naar 3Di\Meppelerdiep\Mepperldiep aka Zedemuden saved from GUI\Meppelerdiep.dsproj_data")
     flow_fm_input_path = dsproj_data_dir / "FlowFM" / "input"
     network_file_path = flow_fm_input_path / "FlowFM_net.nc"
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
@@ -917,7 +924,7 @@ if __name__ == "__main__":
     structures_path = flow_fm_input_path / "structures.ini"
 
     target_gpkg = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Vechtstromen Zuid v2\work in progress\schematisation\Vechtstromen Zuid v2.gpkg"
+        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Mepperldiep\work in progress\schematisation\Mepperldiep.gpkg"
     )
 
     # Clear schematisation geopackage (OPTIONAL)
@@ -943,6 +950,7 @@ if __name__ == "__main__":
         cross_section_locations_path=cross_section_locations_path,
         cross_def_path=cross_def_path,
         structures_path=structures_path,
+        # skip_branches=True,
     )
 
     ##############################################################

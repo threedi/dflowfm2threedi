@@ -101,7 +101,7 @@ class ThreeDiCrossSectionData:
 
     def shift_down(self, shift: float):
         values = list(self._parse_cross_section_table())
-        if values != (None, None):
+        if values != [None, None]:
             z_column_idx = 1 if self.cross_section_shape == CrossSectionShape.YZ else 0
             values[z_column_idx] = list(np.round(np.array(values[z_column_idx]).astype(float) - shift, 4))
             self.cross_section_table = lists_to_csv([values[0], values[1]])
