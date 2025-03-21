@@ -29,7 +29,7 @@ from shapely.geometry import LineString
 from hydrolib_utils import check_structures, read_friction, read_cross_sections, ThreeDiCrossSectionData, \
     ThreeDiFrictionData, \
     BranchFrictionDefinition, count_structure_types, GlobalFrictionDefinition, GenericFrictionDefinition, lists_to_csv, \
-    CrossSectionShape
+    CrossSectionShape, SUPPORTED_STRUCTURES
 
 ogr.UseExceptions()
 
@@ -850,13 +850,7 @@ def dflowfm2threedi(
         cross_section_id_to_defname_mapping=cross_section_id_to_defname_mapping
     )
 
-    for structure_type in [
-        Culvert,
-        Orifice,
-        Weir,
-        Pump,
-        Bridge,
-    ]:
+    for structure_type in SUPPORTED_STRUCTURES:
         print(f"Extracting {structure_type.__name__.lower()}s...")
         extracted_data, field_definitions = extract_from_ini(
             ini_file=structures_path,
@@ -926,58 +920,30 @@ if __name__ == "__main__":
         r"C:\Users\leendert.vanwolfswin\Documents\3Di\Vechtstromen Zuid v2\work in progress\schematisation\Vechtstromen Zuid v2.gpkg"
     )
 
-    # TESTING
-    branches = extract_branches(network_file=network_file_path)
-    friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
-    cross_section_definitions: Dict[str, ThreeDiCrossSectionData] = read_cross_sections(
-    # ThreeDiCrossSectionData.friction_data: ThreeDiFrictionData
-        cross_def_path=cross_def_path,
-        global_friction_definitions=friction_definitions
+    # Clear schematisation geopackage (OPTIONAL)
+    clear_gpkg(
+        gpkg=target_gpkg,
+        layers_to_clear=[
+            "connection_node",
+            "channel",
+            "cross_section_location",
+            "culvert",
+            "orifice",
+            "weir",
+            "pumpstation",
+            "pumpstation_map",
+        ]
     )
 
-    for structure_type in [
-        UniversalWeir,
-    ]:
-
-        extracted_data, field_definitions = extract_from_ini(
-            ini_file=structures_path,
-            object_type=structure_type,
-            branches=branches
-        )
-        import_structures(
-                source=extracted_data,
-                epsg_code=28992,
-                target=target_gpkg,
-                cross_section_data=cross_section_definitions,
-                field_definitions=field_definitions,
-                feature_type=structure_type.__name__.lower()
-        )
-
-
-    # # Clear schematisation geopackage (OPTIONAL)
-    # clear_gpkg(
-    #     gpkg=target_gpkg,
-    #     layers_to_clear=[
-    #         "connection_node",
-    #         "channel",
-    #         "cross_section_location",
-    #         "culvert",
-    #         "orifice",
-    #         "weir",
-    #         "pumpstation",
-    #         "pumpstation_map",
-    #     ]
-    # )
-    #
-    # # Export DFlowFM data to 3Di
-    # dflowfm2threedi(
-    #     target_gpkg=target_gpkg,
-    #     mdu_path=mdu_path,
-    #     network_file_path=network_file_path,
-    #     cross_section_locations_path=cross_section_locations_path,
-    #     cross_def_path=cross_def_path,
-    #     structures_path=structures_path,
-    # )
+    # Export DFlowFM data to 3Di
+    dflowfm2threedi(
+        target_gpkg=target_gpkg,
+        mdu_path=mdu_path,
+        network_file_path=network_file_path,
+        cross_section_locations_path=cross_section_locations_path,
+        cross_def_path=cross_def_path,
+        structures_path=structures_path,
+    )
 
     ##############################################################
     # BEFORE CONTINUING, RUN ALL THE VECTOR DATA IMPORTERS FIRST #

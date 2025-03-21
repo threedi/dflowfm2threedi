@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Type, SupportsRound, Tuple
 from pathlib import Path
 
 from hydrolib.core.dflowfm import Weir, Culvert, Orifice, FlowDirection, Structure, StructureModel, Compound, Pump, \
-    Bridge
+    Bridge, UniversalWeir
 from hydrolib.core.dflowfm.crosssection.models import (
     CircleCrsDef,
     CrossDefModel,
@@ -27,7 +27,7 @@ from hydrolib.core.dflowfm.friction.models import (
 import numpy as np
 
 ASSUMED_WATER_DEPTH = 1
-
+SUPPORTED_STRUCTURES = (Bridge, Weir, Culvert, Orifice, Compound, Pump, UniversalWeir)
 
 class CrossSectionShape(Enum):
     CLOSED_RECTANGLE = 0
@@ -464,7 +464,7 @@ def count_structure_types(structures_path: Path) -> Dict[Type[Structure], int]:
 def check_structures(path: Path):
     structure_counts = count_structure_types(path)
     for structure_type, count in structure_counts.items():
-        if structure_type not in (Bridge, Weir, Culvert, Orifice, Compound, Pump):
+        if structure_type not in SUPPORTED_STRUCTURES:
             warnings.warn(
                 f"Source data contains {count} structures of type {structure_type.__name__}, which are not supported!"
             )
