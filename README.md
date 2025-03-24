@@ -18,8 +18,9 @@ This manual is based on using the following versions:
 - 3Di database schema version 219
 
 ## Installation
-- Required packages: hydrolib-core (pip install hydrolib-core)
-- Required packages: h5netcdf (pip install h5netcdf)
+- Required packages:
+    - gdal (pip install gdal) 
+    - hydrolib-core (pip install hydrolib-core)
 
 ## SOBEK to D-HYDRO
 
