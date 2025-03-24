@@ -17,7 +17,7 @@ from hydrolib.core.dflowfm import (
     Weir,
     Pump,
     Bridge,
-    UniversalWeir
+    UniversalWeir, CrossSectionDefinition, CrossDefModel
 )
 
 from hydrolib.core.dflowfm.ini.models import INIBasedModel
@@ -29,7 +29,7 @@ from shapely.geometry import LineString
 from hydrolib_utils import check_structures, read_friction, read_cross_sections, ThreeDiCrossSectionData, \
     ThreeDiFrictionData, \
     BranchFrictionDefinition, count_structure_types, GlobalFrictionDefinition, GenericFrictionDefinition, lists_to_csv, \
-    CrossSectionShape, SUPPORTED_STRUCTURES
+    CrossSectionShape, SUPPORTED_STRUCTURES, SUPPORTED_CROSS_SECTIONS
 
 ogr.UseExceptions()
 
@@ -311,24 +311,36 @@ def get_field_definitions(objects: List[INIBasedModel]) -> List[ogr.FieldDefn]:
     return result
 
 
-def extract_from_ini(ini_file: Path, object_type: Type[INIBasedModel], branches: Dict) -> Tuple[Dict, List[ogr.FieldDefn]]:
+def extract_from_ini(
+        ini_file: Path,
+        object_type: Type[INIBasedModel],
+        branches: Optional[Dict] = None
+) -> Tuple[Dict, List[ogr.FieldDefn]]:
+    """``branches`` is only required if objects have a branchid and chainage from which to construct a geometry"""
     if object_type == CrossSection:
         extraction_model = CrossLocModel
         attr_name = "crosssection"
-    else:
+    elif object_type in SUPPORTED_CROSS_SECTIONS:
+        extraction_model = CrossDefModel
+        attr_name = "definition"
+    elif object_type in SUPPORTED_STRUCTURES:
         extraction_model = StructureModel
         attr_name = "structure"
+    else:
+        raise ValueError(f"Cannot extract features for object_type {object_type}")
     unfiltered_objects = getattr(extraction_model(ini_file), attr_name)
     objects = [o for o in unfiltered_objects if isinstance(o, object_type)]
+    has_geometery = all([hasattr(obj, "chainage") for obj in objects])
     field_definitions = get_field_definitions(objects)
     layer_dict = dict()
     for obj in objects:
         feature_dict = dict()
-        feature_dict["geometry"] = geometry_from_chainage(
-            branches=branches,
-            branch_id=obj.branchid,
-            chainage=obj.chainage
-        )
+        if has_geometery:
+            feature_dict["geometry"] = geometry_from_chainage(
+                branches=branches,
+                branch_id=obj.branchid,
+                chainage=obj.chainage
+            )
         for field_definition in field_definitions:
             value = getattr(obj, field_definition.name)
             if isinstance(value, list):
@@ -345,7 +357,7 @@ def import_to_threedi_layer(
         input_name_id_mapping: Dict = None
 ) -> Dict:
     """
-    Import schematisation objects from a shapefile that was exported from D-Hydro
+    Import schematisation objects from a source dict that was extracted using extract_from_ini()
 
     :param source: Path to the source shapefile
     :param target: Path to the target 3Di schematisation Geopackage
@@ -504,6 +516,58 @@ def import_structures(
 
             dst_feat.SetField("cross_section_shape", CrossSectionShape.YZ.value)
             dst_feat.SetField("cross_section_table", lists_to_csv([y_values, z_values]))
+
+        gpkg_layer.CreateFeature(dst_feat)
+        dst_feat = None  # Free memory
+
+    # Cleanup
+    gpkg = None
+
+    print(f"Successfully copied {feature_type}s to '{target}' as layer '{target_layer_name}'.")
+
+
+def import_table(
+        source: Dict,
+        target: Path,
+        field_definitions: List[ogr.FieldDefn],
+        feature_type: str = "unknown",
+        target_layer_name: str = None,
+) -> None:
+    """
+    Writes data with no geometry to geopackage
+    Overwrites layer if exists.
+    """
+    target_layer_name = target_layer_name or "dhydro_" + feature_type
+
+    # Open or create the GeoPackage
+    driver = ogr.GetDriverByName("GPKG")
+    gpkg = driver.Open(target, 1)  # 1 = Read/Write mode
+
+    if gpkg is None:
+        # If the GeoPackage doesn't exist, create it
+        gpkg = driver.CreateDataSource(target)
+
+    # Check if the layer already exists and remove it
+    if gpkg.GetLayerByName(target_layer_name):
+        gpkg.DeleteLayer(target_layer_name)
+
+    gpkg_layer = gpkg.CreateLayer(
+        name=target_layer_name,
+        geom_type=ogr.wkbNone
+    )
+
+    # Add additional fields to the GeoPackage layer: Structure object
+    for field_defn in field_definitions:
+        gpkg_layer.CreateField(field_defn)
+
+    # Create features from source
+    dst_layer_defn: ogr.FeatureDefn = gpkg_layer.GetLayerDefn()
+    for src_feat_name, src_feat in source.items():
+        dst_feat = ogr.Feature(dst_layer_defn)
+
+        for attr, value in src_feat.items():
+            field_index = dst_layer_defn.GetFieldIndex(attr)
+            dst_feat.SetField(field_index, value)
 
         gpkg_layer.CreateFeature(dst_feat)
         dst_feat = None  # Free memory
@@ -833,6 +897,21 @@ def dflowfm2threedi(
         global_friction_definitions=friction_definitions
     )
 
+    # Also export raw cross-section data to geopackage, for reference/checking purposes
+    for cross_section_type in SUPPORTED_CROSS_SECTIONS:
+        print(f"Extracting {cross_section_type.__name__.lower()}s...")
+        cross_section_definitions_raw, cross_def_field_definitions = extract_from_ini(
+            ini_file=cross_def_path,
+            object_type=cross_section_type
+        )
+        print(f"Importing {cross_section_type.__name__.lower()}s...")
+        import_table(
+            source=cross_section_definitions_raw,
+            target=target_gpkg,
+            field_definitions=cross_def_field_definitions,
+            feature_type=cross_section_type.__name__.lower()
+        )
+        
     if not skip_branches:
         # enrich cross_section_definitions with branch friction data
         print("Adding branch friction data to cross-section definitions...")
@@ -927,31 +1006,46 @@ if __name__ == "__main__":
         r"C:\Users\leendert.vanwolfswin\Documents\3Di\Mepperldiep\work in progress\schematisation\Mepperldiep.gpkg"
     )
 
-    # Clear schematisation geopackage (OPTIONAL)
-    clear_gpkg(
-        gpkg=target_gpkg,
-        layers_to_clear=[
-            "connection_node",
-            "channel",
-            "cross_section_location",
-            "culvert",
-            "orifice",
-            "weir",
-            "pumpstation",
-            "pumpstation_map",
-        ]
-    )
+    # TESTING
+    for cross_section_type in SUPPORTED_CROSS_SECTIONS:
+        print(f"Extracting {cross_section_type.__name__.lower()}s...")
+        cross_section_definitions_raw, cross_def_field_definitions = extract_from_ini(
+            ini_file=cross_def_path,
+            object_type=cross_section_type
+        )
+        print(f"Importing {cross_section_type.__name__.lower()}s...")
+        import_table(
+            source=cross_section_definitions_raw,
+            target=target_gpkg,
+            field_definitions=cross_def_field_definitions,
+            feature_type=cross_section_type.__name__.lower()
+        )
 
-    # Export DFlowFM data to 3Di
-    dflowfm2threedi(
-        target_gpkg=target_gpkg,
-        mdu_path=mdu_path,
-        network_file_path=network_file_path,
-        cross_section_locations_path=cross_section_locations_path,
-        cross_def_path=cross_def_path,
-        structures_path=structures_path,
-        # skip_branches=True,
-    )
+    # # Clear schematisation geopackage (OPTIONAL)
+    # clear_gpkg(
+    #     gpkg=target_gpkg,
+    #     layers_to_clear=[
+    #         "connection_node",
+    #         "channel",
+    #         "cross_section_location",
+    #         "culvert",
+    #         "orifice",
+    #         "weir",
+    #         "pumpstation",
+    #         "pumpstation_map",
+    #     ]
+    # )
+    #
+    # # Export DFlowFM data to 3Di
+    # dflowfm2threedi(
+    #     target_gpkg=target_gpkg,
+    #     mdu_path=mdu_path,
+    #     network_file_path=network_file_path,
+    #     cross_section_locations_path=cross_section_locations_path,
+    #     cross_def_path=cross_def_path,
+    #     structures_path=structures_path,
+    #     # skip_branches=True,
+    # )
 
     ##############################################################
     # BEFORE CONTINUING, RUN ALL THE VECTOR DATA IMPORTERS FIRST #

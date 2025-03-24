@@ -28,6 +28,14 @@ import numpy as np
 
 ASSUMED_WATER_DEPTH = 1
 SUPPORTED_STRUCTURES = (Bridge, Weir, Culvert, Orifice, Compound, Pump, UniversalWeir)
+SUPPORTED_CROSS_SECTIONS = (
+    CircleCrsDef,
+    RectangleCrsDef,
+    YZCrsDef,
+    ZWCrsDef,
+    ZWRiverCrsDef
+)
+
 
 class CrossSectionShape(Enum):
     CLOSED_RECTANGLE = 0
