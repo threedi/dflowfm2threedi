@@ -279,7 +279,9 @@ def get_field_definitions(objects: List[INIBasedModel]) -> List[ogr.FieldDefn]:
     """
     result = list()
     object_types = set([type(s) for s in objects])
-    if len(object_types) != 1:
+    if len(object_types) == 0:
+        return result
+    elif len(object_types) > 1:
         raise ValueError(f"Objects must be of exactly 1 type, not {object_types}")
 
     attributes = []
@@ -331,8 +333,8 @@ def extract_from_ini(
     unfiltered_objects = getattr(extraction_model(ini_file), attr_name)
     objects = [o for o in unfiltered_objects if isinstance(o, object_type)]
     has_geometery = all([hasattr(obj, "chainage") for obj in objects])
-    field_definitions = get_field_definitions(objects)
     layer_dict = dict()
+    field_definitions = get_field_definitions(objects)
     for obj in objects:
         feature_dict = dict()
         if has_geometery:
@@ -911,7 +913,7 @@ def dflowfm2threedi(
             field_definitions=cross_def_field_definitions,
             feature_type=cross_section_type.__name__.lower()
         )
-        
+
     if not skip_branches:
         # enrich cross_section_definitions with branch friction data
         print("Adding branch friction data to cross-section definitions...")
@@ -1006,46 +1008,31 @@ if __name__ == "__main__":
         r"C:\Users\leendert.vanwolfswin\Documents\3Di\Mepperldiep\work in progress\schematisation\Mepperldiep.gpkg"
     )
 
-    # TESTING
-    for cross_section_type in SUPPORTED_CROSS_SECTIONS:
-        print(f"Extracting {cross_section_type.__name__.lower()}s...")
-        cross_section_definitions_raw, cross_def_field_definitions = extract_from_ini(
-            ini_file=cross_def_path,
-            object_type=cross_section_type
-        )
-        print(f"Importing {cross_section_type.__name__.lower()}s...")
-        import_table(
-            source=cross_section_definitions_raw,
-            target=target_gpkg,
-            field_definitions=cross_def_field_definitions,
-            feature_type=cross_section_type.__name__.lower()
-        )
+    # Clear schematisation geopackage (OPTIONAL)
+    clear_gpkg(
+        gpkg=target_gpkg,
+        layers_to_clear=[
+            "connection_node",
+            "channel",
+            "cross_section_location",
+            "culvert",
+            "orifice",
+            "weir",
+            "pumpstation",
+            "pumpstation_map",
+        ]
+    )
 
-    # # Clear schematisation geopackage (OPTIONAL)
-    # clear_gpkg(
-    #     gpkg=target_gpkg,
-    #     layers_to_clear=[
-    #         "connection_node",
-    #         "channel",
-    #         "cross_section_location",
-    #         "culvert",
-    #         "orifice",
-    #         "weir",
-    #         "pumpstation",
-    #         "pumpstation_map",
-    #     ]
-    # )
-    #
-    # # Export DFlowFM data to 3Di
-    # dflowfm2threedi(
-    #     target_gpkg=target_gpkg,
-    #     mdu_path=mdu_path,
-    #     network_file_path=network_file_path,
-    #     cross_section_locations_path=cross_section_locations_path,
-    #     cross_def_path=cross_def_path,
-    #     structures_path=structures_path,
-    #     # skip_branches=True,
-    # )
+    # Export DFlowFM data to 3Di
+    dflowfm2threedi(
+        target_gpkg=target_gpkg,
+        mdu_path=mdu_path,
+        network_file_path=network_file_path,
+        cross_section_locations_path=cross_section_locations_path,
+        cross_def_path=cross_def_path,
+        structures_path=structures_path,
+        # skip_branches=True,
+    )
 
     ##############################################################
     # BEFORE CONTINUING, RUN ALL THE VECTOR DATA IMPORTERS FIRST #
