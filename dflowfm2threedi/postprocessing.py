@@ -189,39 +189,41 @@ class ShortChannelDeleter:
             )
         feature.SetField(field_to_be_updated, replacement_id)  # Replace with the new value
         target_geom = feature.GetGeometryRef()
-        geom_name = target_geom.GetGeometryName()
-        geom_type = target_geom.GetGeometryType()
         connection_node_layer = data_source.GetLayerByName("connection_node")
         connection_node_layer.SetAttributeFilter(f"id={replacement_id}")
         replacement_connection_node = connection_node_layer.GetNextFeature()
         vertex_geom = replacement_connection_node.GetGeometryRef()
         move_vertex_in_geometry(target_geom=target_geom, new_vertex=vertex_geom, first_or_last=first_or_last)
-        geom_name = target_geom.GetGeometryName()
-        geom_type = target_geom.GetGeometryType()
         feature.SetGeometry(target_geom)
 
         # Save changes to the layer
         layer.SetFeature(feature)
+        feature_id = feature["id"]
         feature = None  # Free memory
 
         # Update index for this layer
         index = self.indices[layer_name]
-        new_index_entry = set()
-        for connection_node_field, feature in index[delete_id]:
-            index_entry_item = (connection_node_field, feature)
-            feature_layer_name = feature.GetDefnRef().GetName()
-            if feature_layer_name == layer_name and connection_node_field == field_to_be_updated:
-                if replacement_id in index:
-                    index[replacement_id].add(index_entry_item)
+        if delete_id in index:  # TODO fix this properly.
+            old_index_entry = index[delete_id]
+            new_index_entry = set()
+            for connection_node_field, feature in old_index_entry:
+                index_entry_item = (connection_node_field, feature)
+                feature_layer_name = feature.GetDefnRef().GetName()
+                if feature_layer_name == layer_name and connection_node_field == field_to_be_updated:
+                    if replacement_id in index:
+                        index[replacement_id].add(index_entry_item)
+                    else:
+                        index[replacement_id] = {index_entry_item}
                 else:
-                    index[replacement_id] = {index_entry_item}
+                    new_index_entry.add(index_entry_item)
+            if new_index_entry:
+                index[delete_id] = new_index_entry
             else:
-                new_index_entry.add(index_entry_item)
-        if new_index_entry:
-            index[delete_id] = new_index_entry
+                index.pop(delete_id)
+            self.indices[layer_name] = index
         else:
-            index.pop(delete_id)
-        self.indices[layer_name] = index
+            print(f"Connection node {delete_id} not found in index for {layer_name} when updating feature {feature_id}. "
+                  f"Not updating its index!")
 
     def delete_zero_length_channels(self, channel_ids: List = None):
         """Deletes all channels that have connection_node_start_id == connection_node_end_id"""
