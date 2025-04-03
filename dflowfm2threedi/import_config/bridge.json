@@ -60,16 +60,11 @@
       "source_attribute": "",
       "default_value": false
     },
-    "zoom_category": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 2
-    },
-    "connection_node_start_id": {
+    "connection_node_id_start": {
       "method": "auto",
       "source_attribute": ""
     },
-    "connection_node_end_id": {
+    "connection_node_id_end": {
       "method": "auto",
       "source_attribute": ""
     },
@@ -101,7 +96,7 @@
       "source_attribute": "",
       "expression": "'Bridge '||\"id\""
     },
-    "initial_waterlevel": {
+    "initial_water_level": {
       "method": "ignore",
       "source_attribute": ""
     },
@@ -109,71 +104,28 @@
       "method": "ignore",
       "source_attribute": "",
       "default_value": 1.0
-    }
-  },
-  "manhole_fields": {
-    "id": {
-      "method": "auto",
-      "source_attribute": ""
     },
-    "code": {
-      "method": "expression",
-      "source_attribute": "",
-      "expression": "'Bridge '||\"id\""
-    },
-    "display_name": {
-      "method": "expression",
-      "source_attribute": ""
-    },
-    "calculation_type": {
+    "exchange_type": {
       "method": "default",
       "source_attribute": "",
       "default_value": 2
-    },
-    "shape": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": "00"
-    },
-    "width": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 1.0
-    },
-    "length": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 1.0
     },
     "bottom_level": {
       "method": "ignore",
       "source_attribute": ""
     },
-    "surface_level": {
+    "manhole_surface_level": {
       "method": "ignore",
       "source_attribute": ""
     },
-    "drain_level": {
+    "exchange_level": {
       "method": "ignore",
       "source_attribute": ""
     },
-    "sediment_level": {
-      "method": "ignore",
-      "source_attribute": ""
-    },
-    "manhole_indicator": {
+    "visualisation": {
       "method": "default",
       "source_attribute": "",
       "default_value": 0
-    },
-    "zoom_category": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 2
-    },
-    "connection_node_id": {
-      "method": "auto",
-      "source_attribute": ""
     },
     "exchange_thickness": {
       "method": "ignore",

@@ -4,7 +4,6 @@
     "use_snapping": true,
     "snapping_distance": 0.1,
     "create_connection_nodes": true,
-    "create_manholes": true,
     "length_source_field": "length",
     "length_fallback_value": 1.0,
     "azimuth_source_field": "",
@@ -25,21 +24,21 @@
       "source_attribute": "",
       "expression": "'Culvert '||id"
     },
-    "calculation_type": {
+    "exchange_type": {
       "method": "default",
       "source_attribute": "",
       "default_value": 101
     },
-    "dist_calc_points": {
+    "calculation_point_distance": {
       "method": "default",
       "source_attribute": "",
       "default_value": 25.0
     },
-    "invert_level_start_point": {
+    "invert_level_start": {
       "method": "source_attribute",
       "source_attribute": "leftlevel"
     },
-    "invert_level_end_point": {
+    "invert_level_end": {
       "method": "source_attribute",
       "source_attribute": "rightlevel"
     },
@@ -62,16 +61,11 @@
       "source_attribute": "friction_type",
       "default_value": 2
     },
-    "zoom_category": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 2
-    },
-    "connection_node_start_id": {
+    "connection_node_id_start": {
       "method": "auto",
       "source_attribute": ""
     },
-    "connection_node_end_id": {
+    "connection_node_id_end": {
       "method": "auto",
       "source_attribute": ""
     },
@@ -103,7 +97,7 @@
       "source_attribute": "",
       "expression": "'Culvert '||\"id\""
     },
-    "initial_waterlevel": {
+    "initial_water_level": {
       "method": "ignore",
       "source_attribute": ""
     },
@@ -111,71 +105,32 @@
       "method": "ignore",
       "source_attribute": "",
       "default_value": 1.0
-    }
-  },
-  "manhole_fields": {
-    "id": {
-      "method": "auto",
-      "source_attribute": ""
-    },
-    "code": {
-      "method": "expression",
-      "source_attribute": "",
-      "expression": "'Culvert '||\"id\""
     },
     "display_name": {
       "method": "ignore",
       "source_attribute": ""
     },
-    "calculation_type": {
+    "exchange_type": {
       "method": "default",
       "source_attribute": "",
       "default_value": 2
-    },
-    "shape": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": "00"
-    },
-    "width": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 1.0
-    },
-    "length": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 1.0
     },
     "bottom_level": {
       "method": "ignore",
       "source_attribute": ""
     },
-    "surface_level": {
+    "manhole_surface_level": {
       "method": "ignore",
       "source_attribute": ""
     },
-    "drain_level": {
+    "exchange_level": {
       "method": "ignore",
       "source_attribute": ""
     },
-    "sediment_level": {
-      "method": "ignore",
-      "source_attribute": ""
-    },
-    "manhole_indicator": {
+    "visualisation": {
       "method": "default",
       "source_attribute": "",
       "default_value": 0
-    },
-    "zoom_category": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 2
-    },
-    "connection_node_id": {
-      "method": "auto",
-      "source_attribute": ""
     },
     "exchange_thickness": {
       "method": "ignore",

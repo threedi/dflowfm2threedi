@@ -103,8 +103,7 @@ ORIFICE_TO_POSITIVE_PUMP_REPLACEMENT_CONFIG = {
         parser=lambda x: 1 if x == "suctionSide" else 2 if x == "deliverySide" else None
     ),
     "sewerage": ReplacementConfig(get_from="delete_layer", source_field="sewerage"),
-    "zoom_category": ReplacementConfig(get_from="delete_layer", source_field="zoom_category"),
-    "connection_node_id": ReplacementConfig(get_from="delete_layer", source_field="connection_node_start_id"),
+    "connection_node_id": ReplacementConfig(get_from="delete_layer", source_field="connection_node_id_start"),
 }
 
 
@@ -129,8 +128,8 @@ channel_layer_mapping = LayerMapping(
     field_mapping={
         "branch_id": "code",
         "branch_long_name": "display_name",
-        "source_node_id": Proxy("connection_node_start_id"),
-        "target_node_id": Proxy("connection_node_end_id"),
+        "source_node_id": Proxy("connection_node_id_start"),
+        "target_node_id": Proxy("connection_node_id_start"),
     },
 )
 
@@ -382,7 +381,7 @@ def import_to_threedi_layer(
     max_id = 0
     dst_layer.ResetReading()  # Ensure we read from the beginning of the layer
     for feat in dst_layer:
-        current_id = feat.GetField("id")
+        current_id = feat.GetFID()
         if current_id is not None and current_id > max_id:
             max_id = current_id
 
@@ -398,7 +397,7 @@ def import_to_threedi_layer(
         dst_feat.SetGeometry(new_geom)
 
         # Set the target primary key "id" with the next auto-increment value
-        dst_feat.SetField("id", next_id)
+        dst_feat.SetFID(next_id)
 
         for source_field, target_field in layer_mapping.field_mapping.items():
             source_value = src_feat[source_field]
@@ -626,7 +625,7 @@ def add_cross_section_data_to_feature(
                 feature.SetField(attribute, new_value)
     else:
         warnings.warn(
-            f"Friction data for {feature_type} with ID {feature['id']} is not valid. "
+            f"Friction data for {feature_type} with ID {feature.GetFID()} is not valid. "
             f"Reason: {cross_section_definition.friction_data.invalid_reason}"
         )
 
@@ -644,7 +643,7 @@ def enrich_cross_section_locations(
     else:
         layer = data_source.GetLayer("cross_section_location")
         for feature in layer:
-            cross_section_location_id = feature['id']
+            cross_section_location_id = feature.GetFID()
             try:
                 def_name = cross_section_id_to_defname_mapping[cross_section_location_id]
                 cross_section_definition = cross_section_data[def_name]
@@ -791,7 +790,7 @@ def map_pumps(gpkg: Path, replacement_data: List[Tuple]):
     if data_source is None:
         raise RuntimeError(f"Failed to open {gpkg}")
 
-    target_layer_name = "pumpstation_map"
+    target_layer_name = "pump_map"
     target_layer = data_source.GetLayerByName(target_layer_name)
 
     if target_layer is None:
@@ -809,16 +808,16 @@ def map_pumps(gpkg: Path, replacement_data: List[Tuple]):
         new_feature.SetGeometry(geom)
 
         # attributes from pump feature
-        new_feature.SetField("id", pump_feature.GetField("id"))
+        new_feature.SetFID(pump_feature.GetFID())
         new_feature.SetField("code", pump_feature.GetField("code"))
         new_feature.SetField("display_name", pump_feature.GetField("display_name"))
-        new_feature.SetField("pumpstation_id", pump_feature.GetField("id"))
+        new_feature.SetField("pump_id", pump_feature.GetFID())
 
         # attributes from proxy-orifice feature
-        start = "connection_node_start_id" if orientation == "positive" else "connection_node_end_id"
-        end = "connection_node_end_id" if orientation == "positive" else "connection_node_start_id"
-        new_feature.SetField("connection_node_start_id", deleted_feature.GetField(start))
-        new_feature.SetField("connection_node_end_id", deleted_feature.GetField(end))
+        start = "connection_node_id_start" if orientation == "positive" else "connection_node_id_end"
+        end = "connection_node_id_end" if orientation == "positive" else "connection_node_id_start"
+        new_feature.SetField("connection_node_id_start", deleted_feature.GetField(start))
+        new_feature.SetField("connection_node_id_end", deleted_feature.GetField(end))
 
         target_layer.CreateFeature(new_feature)
 
@@ -987,7 +986,7 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
             gpkg=gpkg,
             source=pump_data,
             delete_from_layer="orifice",
-            add_to_layer="pumpstation",
+            add_to_layer="pump",
             config=config,
             match_field="code",
             match_prefix="Pump ",
@@ -996,7 +995,7 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
 
 
 if __name__ == "__main__":
-    dsproj_data_dir = Path(r"G:\Projecten Z (2024)\Z0252 - Bovenregionale stresstest wateroverlast OV\Gegevens\Bewerking\6_Omzetting Sobek naar 3Di\Meppelerdiep\Mepperldiep aka Zedemuden saved from GUI\Meppelerdiep.dsproj_data")
+    dsproj_data_dir = Path(r"C:\Users\leendert.vanwolfswin\Downloads\Meppelerdiep.dsproj_data")
     flow_fm_input_path = dsproj_data_dir / "FlowFM" / "input"
     network_file_path = flow_fm_input_path / "FlowFM_net.nc"
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
@@ -1005,7 +1004,7 @@ if __name__ == "__main__":
     structures_path = flow_fm_input_path / "structures.ini"
 
     target_gpkg = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Mepperldiep\work in progress\schematisation\Mepperldiep.gpkg"
+        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Dev dflowfm3threedi schema 300\work in progress\schematisation\Dev dflowfm3threedi schema 300.gpkg"
     )
 
     # Clear schematisation geopackage (OPTIONAL)
@@ -1018,8 +1017,8 @@ if __name__ == "__main__":
             "culvert",
             "orifice",
             "weir",
-            "pumpstation",
-            "pumpstation_map",
+            "pump",
+            "pump_map",
         ]
     )
 

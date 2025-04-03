@@ -4,7 +4,6 @@
     "use_snapping": true,
     "snapping_distance": 0.1,
     "create_connection_nodes": true,
-    "create_manholes": false,
     "length_source_field": "",
     "length_fallback_value": 2.5,
     "azimuth_source_field": "",
@@ -57,16 +56,11 @@
       "source_attribute": "",
       "default_value": false
     },
-    "zoom_category": {
-      "method": "ignore",
-      "source_attribute": "",
-      "default_value": "NULL"
-    },
-    "connection_node_start_id": {
+    "connection_node_id_start": {
       "method": "auto",
       "source_attribute": ""
     },
-    "connection_node_end_id": {
+    "connection_node_id_end": {
       "method": "auto",
       "source_attribute": ""
     },
@@ -98,68 +92,36 @@
       "source_attribute": "",
       "expression": "'Pump '||id"
     },
-    "initial_waterlevel": {
+    "initial_water_level": {
       "method": "ignore",
       "source_attribute": ""
     },
     "storage_area": {
       "method": "ignore",
       "source_attribute": ""
-    }
-  },
-  "manhole_fields": {
-    "id": {
-      "method": "auto",
-      "source_attribute": "id"
-    },
-    "code": {
-      "method": "source_attribute",
-      "source_attribute": ""
     },
     "display_name": {
       "method": "source_attribute",
       "source_attribute": ""
     },
-    "calculation_type": {
+    "exchange_type": {
       "method": "source_attribute",
       "source_attribute": "",
       "default_value": "NULL"
-    },
-    "shape": {
-      "method": "source_attribute",
-      "source_attribute": "",
-      "default_value": "NULL"
-    },
-    "width": {
-      "method": "source_attribute",
-      "source_attribute": ""
-    },
-    "length": {
-      "method": "source_attribute",
-      "source_attribute": ""
     },
     "bottom_level": {
       "method": "source_attribute",
       "source_attribute": ""
     },
-    "surface_level": {
+    "manhole_surface_level": {
       "method": "source_attribute",
       "source_attribute": ""
     },
-    "drain_level": {
+    "exchange_level": {
       "method": "source_attribute",
       "source_attribute": ""
     },
-    "sediment_level": {
-      "method": "source_attribute",
-      "source_attribute": ""
-    },
-    "manhole_indicator": {
-      "method": "source_attribute",
-      "source_attribute": "",
-      "default_value": "NULL"
-    },
-    "zoom_category": {
+    "visualisation": {
       "method": "source_attribute",
       "source_attribute": "",
       "default_value": "NULL"
