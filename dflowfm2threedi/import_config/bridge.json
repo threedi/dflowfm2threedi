@@ -27,8 +27,7 @@
     },
     "crest_level": {
       "method": "source_attribute",
-      "source_attribute": "reference_level",
-      "expression": " max(\"leftlevel\",  \"rightlevel\") "
+      "source_attribute": "reference_level"
     },
     "crest_type": {
       "method": "expression",
@@ -99,7 +98,7 @@
     "code": {
       "method": "expression",
       "source_attribute": "",
-      "expression": "'Bridge '||\"id\""
+      "expression": "'Bridge '|| \"id\""
     },
     "initial_waterlevel": {
       "method": "ignore",
@@ -123,7 +122,8 @@
     },
     "display_name": {
       "method": "expression",
-      "source_attribute": ""
+      "source_attribute": "",
+      "expression": "'Bridge '||\"id\""
     },
     "calculation_type": {
       "method": "default",
