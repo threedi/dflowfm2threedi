@@ -123,7 +123,7 @@
     "code": {
       "method": "expression",
       "source_attribute": "",
-      "expression": "'Orifice '||\"id\""
+      "expression": "'Weir '||\"id\""
     },
     "display_name": {
       "method": "ignore",
