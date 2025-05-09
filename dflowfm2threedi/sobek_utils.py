@@ -1,11 +1,12 @@
+import csv
 import re
 from dataclasses import dataclass, fields
 from pathlib import Path
 from pprint import pprint
-from typing import List
+from typing import List, get_type_hints
 
 
-class Table:
+class Table(str):
     pass
 
 
@@ -14,7 +15,7 @@ class TimeController:
     id: str
     nm: str = None
     ct: str = None
-    ca: str = None
+    ca: int = None
     ac: str = None
     cf: str = None
     ta: str = None
@@ -36,7 +37,7 @@ class HydraulicController:
     ao: str = None
     ct: str = None
     ac: str = None
-    ca: str = None
+    ca: int = None
     cf: str = None
     ml: str = None
     mp: str = None
@@ -44,12 +45,11 @@ class HydraulicController:
     cl: str = None
     cp: str = None
     b1: str = None
-    hc9ht: str = None  # 9 is interpreted as space
+    hc9ht91: Table = None  # 9 is interpreted as space
     bl: str = None
     ci: str = None
     ps: str = None
     ns: str = None
-
 
 
 @dataclass
@@ -61,7 +61,7 @@ class IntervalController:
     ao: str = None
     ct: str = None
     ac: str = None
-    ca: str = None
+    ca: int = None
     cf: str = None
     cb: str = None
     cl: str = None
@@ -90,7 +90,7 @@ class PIDController:
     ao: str = None
     ct: str = None
     ac: str = None
-    ca: str = None
+    ca: int = None
     cf: str = None
     cb: str = None
     cl: str = None
@@ -117,7 +117,7 @@ class RelativeTimeController:
     ao: str = None
     ct: str = None
     ac: str = None
-    ca: str = None
+    ca: int = None
     cf: str = None
     mc: str = None
     mp: str = None
@@ -133,7 +133,7 @@ class RelativeFromValueController:
     ao: str = None
     ct: str = None
     ac: str = None
-    ca: str = None
+    ca: int = None
     cf: str = None
     mc: str = None
     mp: str = None
@@ -154,6 +154,37 @@ def get_value(text, key):
     pattern = r"\b" + re.escape(key) + r"\b\s+(?:['\"])?([^\s'\"]+)"
     match = re.search(pattern, text, re.IGNORECASE)
     return match.group(1) if match else None
+
+
+def get_table(text, key):
+    """
+    """
+    if key == "hc ht 1":
+        pass
+    table_lines = list()
+    start_pattern = "TBLE"
+    end_pattern = "tble"
+    table = None
+    start_reading = False
+    for line in text.split("\n"):
+        if start_reading:
+            if len(table_lines) == 0 and not line.startswith(start_pattern):
+                raise Exception("Expected start of a TBLE but did not find it")
+            line = line.strip("\n").strip("<").strip()
+            line = ",".join(line.split(" "))
+            table_lines.append(line)
+            if end_pattern in line:
+                table = "\n".join(table_lines[1:-1])
+                break
+        else:
+            if line.endswith(key):
+                start_reading = True
+    return table
+
+
+def get_last_value_from_table(table):
+    lines = [line for line in table.split("\n")]
+    return lines[-1].split(",")[-1]
 
 
 def deduplicate_friction_file(input_file, output_file):
@@ -195,16 +226,26 @@ def deduplicate_friction_file(input_file, output_file):
 
 
 def populate_control(control, record):
+    type_hints = get_type_hints(type(control))  # get field types from the dataclass
+
     for field in fields(control):
-        value = get_value(record, field.name)
-        setattr(control, field.name, value)
+        field_name = field.name.replace("9", " ")
+        field_type = type_hints.get(field.name)
+
+        if field_type is Table:
+            # Custom logic for Table-typed fields
+            table_data = get_table(record, field_name)
+            setattr(control, field.name, table_data)
+        else:
+            value = get_value(record, field_name)
+            setattr(control, field.name, value)
 
 
-def parse_control_def(input_file):
+def parse_control_def(input_file, exclude=None):
     """
     Parses CONTROL.DEF file into python objects
     """
-
+    exclude = exclude or []
     with open(input_file, "r", encoding="utf-8") as f:
         content = f.readlines()
 
@@ -222,11 +263,12 @@ def parse_control_def(input_file):
             control_id = get_value(record, "id")
             control_type = get_value(record, "ct")
             control_model = CONTROL_MODELS[int(control_type)]
-            control = control_model(id=control_id)
-            populate_control(control, record)
-            controls[control_id] = control
+            if control_model not in exclude:
+                control = control_model(id=control_id)
+                populate_control(control, record)
+                controls[control_id] = control
             record_lines = list()
-    pprint(controls)
+    return controls
 
 
 # Example usage
@@ -235,5 +277,23 @@ if __name__ == "__main__":
     # deduplicate_friction_file(case_dir / "FRICTION.DAT", case_dir / "FRICTION_deduplicated.DAT")
     # # Don't forget the rename or delete FRICTION.DAT and than rename FRICTION_deduplicated.DAT to FRICTION.DAT
 
-    case_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\2025-01-20 Vechtstromen - NBW model Vechtstromen\NBW_2501.lit\1")
-    parse_control_def(case_dir / "CONTROL.DEF")
+    case_dir = Path(r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337def.lit\5")
+    control_dict = parse_control_def(case_dir / "CONTROL.DEF")
+    for control in control_dict.values():
+        if isinstance(control, HydraulicController):
+            print(control.hc9ht91)
+    control_dict = parse_control_def(case_dir / "CONTROL.DEF", exclude=[TimeController])
+    with open(case_dir / "control.csv", "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+
+        # Write the header
+        writer.writerow(["id", "name", "ca", "ua"])
+
+        # Write each row
+        for id, control in control_dict.items():
+            ua = get_last_value_from_table(control.hc9ht91) if isinstance(control, HydraulicController) else control.ua
+
+            writer.writerow([control.id, control.nm, control.ca, ua])
+            # ml = id of measurement node
+            # cp = type of measured parameter; 0 = water level, 1 = discharge
+            # sp tc 0 = constant setpoint
