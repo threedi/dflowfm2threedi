@@ -104,6 +104,7 @@ ORIFICE_TO_POSITIVE_PUMP_REPLACEMENT_CONFIG = {
     ),
     "sewerage": ReplacementConfig(get_from="delete_layer", source_field="sewerage"),
     "connection_node_id": ReplacementConfig(get_from="delete_layer", source_field="connection_node_id_start"),
+    "tags": ReplacementConfig(get_from="delete_layer", source_field="tags"),
 }
 
 
@@ -812,6 +813,8 @@ def map_pumps(gpkg: Path, replacement_data: List[Tuple]):
         new_feature.SetField("code", pump_feature.GetField("code"))
         new_feature.SetField("display_name", pump_feature.GetField("display_name"))
         new_feature.SetField("pump_id", pump_feature.GetFID())
+        new_feature.SetField("tags", pump_feature.GetField("tags"))
+
 
         # attributes from proxy-orifice feature
         start = "connection_node_id_start" if orientation == "positive" else "connection_node_id_end"

@@ -42,6 +42,10 @@
       "method": "ignore",
       "source_attribute": ""
     },
+    "material_id": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
     "friction_value": {
       "method": "ignore",
       "source_attribute": "friction_value"
@@ -80,6 +84,10 @@
     "cross_section_table": {
       "method": "ignore",
       "source_attribute": "cross_section_table"
+    },
+    "tags": {
+      "method": "ignore",
+      "source_attribute": ""
     }
   },
   "connection_node_fields": {
@@ -92,7 +100,7 @@
       "source_attribute": "",
       "expression": "'Pump '||id"
     },
-    "initial_water_level": {
+    "display_name": {
       "method": "ignore",
       "source_attribute": ""
     },
@@ -100,46 +108,46 @@
       "method": "ignore",
       "source_attribute": ""
     },
-    "display_name": {
-      "method": "source_attribute",
-      "source_attribute": ""
-    },
-    "exchange_type": {
-      "method": "source_attribute",
-      "source_attribute": "",
-      "default_value": "NULL"
-    },
-    "bottom_level": {
-      "method": "source_attribute",
-      "source_attribute": ""
-    },
-    "manhole_surface_level": {
-      "method": "source_attribute",
-      "source_attribute": ""
-    },
-    "exchange_level": {
-      "method": "source_attribute",
+    "initial_water_level": {
+      "method": "ignore",
       "source_attribute": ""
     },
     "visualisation": {
-      "method": "source_attribute",
+      "method": "ignore",
       "source_attribute": "",
       "default_value": "NULL"
     },
-    "connection_node_id": {
-      "method": "auto",
+    "manhole_surface_level": {
+      "method": "ignore",
       "source_attribute": ""
     },
+    "bottom_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "exchange_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "exchange_type": {
+      "method": "ignore",
+      "source_attribute": "",
+      "default_value": "NULL"
+    },
     "exchange_thickness": {
-      "method": "source_attribute",
+      "method": "ignore",
       "source_attribute": ""
     },
     "hydraulic_conductivity_in": {
-      "method": "source_attribute",
+      "method": "ignore",
       "source_attribute": ""
     },
     "hydraulic_conductivity_out": {
-      "method": "source_attribute",
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "tags": {
+      "method": "ignore",
       "source_attribute": ""
     }
   }

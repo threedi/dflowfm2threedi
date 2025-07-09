@@ -115,6 +115,8 @@ Do the following:
 - Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
 - Run
 
+Complete abovementioned steps for ``dhydro_universalweir``, with the template ``universal_weir.json``
+
 ### Pumps
 
 At the moment of writing, there is no vector data importer available for pumps. However, we can use the existing functionality of the vector data importers to cut the pumps out of the channel network. The way we do this is by importing the pumps as dummy orifices, which will subsequently be replaced by pumps and pump_maps.

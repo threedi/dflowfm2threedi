@@ -44,6 +44,10 @@
       "source_attribute": "corrcoeff",
       "expression": "CASE \r\n\tWHEN \"allowedflowdir\"  in ('both', 'negative') THEN  \"corrcoeff\" \r\n\tWHEN \"allowedflowdir\"  in ('none', 'positive') THEN  0\r\nEND\r\n"
     },
+    "material_id": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
     "friction_value": {
       "method": "ignore",
       "source_attribute": "friction_value"
@@ -87,6 +91,10 @@
     "cross_section_table": {
       "method": "ignore",
       "source_attribute": "cross_section_table"
+    },
+    "tags": {
+      "method": "ignore",
+      "source_attribute": ""
     }
   },
   "connection_node_fields": {
@@ -99,34 +107,17 @@
       "source_attribute": "",
       "expression": "'Weir '||\"id\""
     },
-    "initial_water_level": {
+    "display_name": {
       "method": "ignore",
-      "source_attribute": ""
+      "source_attribute": "",
+      "expression": "'Orifice '||\"LongName\""
     },
     "storage_area": {
       "method": "ignore",
       "source_attribute": "",
       "default_value": 1.0
     },
-    "display_name": {
-      "method": "ignore",
-      "source_attribute": "",
-      "expression": "'Orifice '||\"LongName\""
-    },
-    "exchange_type": {
-      "method": "default",
-      "source_attribute": "",
-      "default_value": 2
-    },
-    "bottom_level": {
-      "method": "ignore",
-      "source_attribute": ""
-    },
-    "surface_level": {
-      "method": "ignore",
-      "source_attribute": ""
-    },
-    "drain_level": {
+    "initial_water_level": {
       "method": "ignore",
       "source_attribute": ""
     },
@@ -135,9 +126,22 @@
       "source_attribute": "",
       "default_value": 0
     },
-    "connection_node_id": {
-      "method": "auto",
+    "manhole_surface_level": {
+      "method": "ignore",
       "source_attribute": ""
+    },
+    "bottom_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "exchange_level": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "exchange_type": {
+      "method": "default",
+      "source_attribute": "",
+      "default_value": 2
     },
     "exchange_thickness": {
       "method": "ignore",
@@ -148,6 +152,10 @@
       "source_attribute": ""
     },
     "hydraulic_conductivity_out": {
+      "method": "ignore",
+      "source_attribute": ""
+    },
+    "tags": {
       "method": "ignore",
       "source_attribute": ""
     }
