@@ -151,6 +151,7 @@ Do the following:
         select connection_node_id_start as id from orifice where connection_node_id_start != connection_node_id_end
         union
         select connection_node_id_end as id from orifice where connection_node_id_start != connection_node_id_end
+        union
         select connection_node_id_end as id from pump_map
     )
     SELECT DISTINCT culvert.* 
