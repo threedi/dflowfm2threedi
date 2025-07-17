@@ -130,7 +130,7 @@ channel_layer_mapping = LayerMapping(
         "branch_id": "code",
         "branch_long_name": "display_name",
         "source_node_id": Proxy("connection_node_id_start"),
-        "target_node_id": Proxy("connection_node_id_start"),
+        "target_node_id": Proxy("connection_node_id_end"),
     },
 )
 
@@ -1007,7 +1007,7 @@ if __name__ == "__main__":
     structures_path = flow_fm_input_path / "structures.ini"
 
     target_gpkg = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Dev dflowfm3threedi schema 300\work in progress\schematisation\Dev dflowfm3threedi schema 300.gpkg"
+        r"C:\Users\leendert.vanwolfswin\Documents\overijssel\Empty 1D schematisation.gpkg"
     )
 
     # Clear schematisation geopackage (OPTIONAL)
