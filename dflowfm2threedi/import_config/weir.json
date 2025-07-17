@@ -110,7 +110,7 @@
     "display_name": {
       "method": "ignore",
       "source_attribute": "",
-      "expression": "'Orifice '||\"LongName\""
+      "expression": "'Weir '||\"id\""
     },
     "storage_area": {
       "method": "ignore",
