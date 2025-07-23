@@ -39,21 +39,15 @@ class ShortChannelDeleter:
     def _update_reference_dict(self, channels: List):
         for channel in channels:
             network_referencing_start = self.get_referencing_features(
-                # channel_id=channel["id"],
                 channel_id=channel.GetFID(),
                 connection_node_id=channel["connection_node_id_start"],
                 target_object_types=NETWORK_OBJECTS
             )
             network_referencing_end = self.get_referencing_features(
-                # channel_id=channel["id"],
                 channel_id=channel.GetFID(),
                 connection_node_id=channel["connection_node_id_end"],
                 target_object_types=NETWORK_OBJECTS
             )
-            # self.reference_dict[channel["id"]] = {
-            #     "start": network_referencing_start,
-            #     "end": network_referencing_end,
-            # }
             self.reference_dict[channel.GetFID()] = {
                 "start": network_referencing_start,
                 "end": network_referencing_end,
@@ -102,13 +96,11 @@ class ShortChannelDeleter:
                 if connection_node_id in all_references:
                     references = all_references[connection_node_id]
                     for field_name, feature in references:
-                        # if not (layer_name == "channel" and feature["id"] == channel_id):  # exclude channel self-references
-                        if not (layer_name == "channel" and feature.GetFID() == channel_id):  # exclude channel self-references                        
+                        if not (layer_name == "channel" and feature.GetFID() == channel_id):  # exclude channel self-references
                             result.append((layer_name, field_name, feature))
         return result
 
     def delete_channel(self, channel):
-        # channel_id = channel["id"]
         channel_id = channel.GetFID()
         try:
             references = self.reference_dict[channel_id]
@@ -207,7 +199,6 @@ class ShortChannelDeleter:
 
         # Save changes to the layer
         layer.SetFeature(feature)
-        # feature_id = feature["id"]
         feature_id = feature.GetFID()
         feature = None  # Free memory
 
@@ -274,8 +265,6 @@ class ShortChannelDeleter:
         self.delete_zero_length_channels(channel_ids=channel_ids)
         for channel in self.short_channels:
             if channel_ids:
-                # if channel["id"] in channel_ids:
-                #     self.delete_channel(channel)
                 if channel.GetFID() in channel_ids:
                     self.delete_channel(channel)
             else:
