@@ -1,26 +1,19 @@
+import configparser
 import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from pprint import pprint
-from types import NoneType
-from typing import Dict, List, Type, Optional, Tuple, Callable
+from typing import Dict, List, Optional, Tuple, Callable
 
 import numpy as np
-from hydrolib.core.dflowfm import (
-    CrossLocModel,
-    StructureModel,
-    CrossSection,
-    Culvert,
-    Structure,
-    Orifice,
-    Weir,
-    Pump,
-    Bridge,
-    UniversalWeir, CrossSectionDefinition, CrossDefModel
-)
 
-from hydrolib.core.dflowfm.ini.models import INIBasedModel
+from hydrolib.core.dflowfm import (
+    CrossSection,
+    Pump,
+    FrictGlobal,
+    FrictBranch
+)
 from netCDF4 import Dataset
 from osgeo import ogr, osr
 from shapely import Point
@@ -28,8 +21,9 @@ from shapely.geometry import LineString
 
 from hydrolib_utils import check_structures, read_friction, read_cross_sections, ThreeDiCrossSectionData, \
     ThreeDiFrictionData, \
-    BranchFrictionDefinition, count_structure_types, GlobalFrictionDefinition, GenericFrictionDefinition, lists_to_csv, \
-    CrossSectionShape, SUPPORTED_STRUCTURES, SUPPORTED_CROSS_SECTIONS
+    BranchFrictionDefinition, count_structure_types, GenericFrictionDefinition, lists_to_csv, \
+    CrossSectionShape, SUPPORTED_STRUCTURES, SUPPORTED_CROSS_SECTIONS, OGR_FIELD_TYPES, \
+    extract_from_ini, features_have_geometry
 
 ogr.UseExceptions()
 
@@ -49,14 +43,6 @@ class ReplacementConfig:
 
 class Proxy(str):
     pass
-
-
-OGR_FIELD_TYPES = {
-    str: ogr.OFTString,
-    int: ogr.OFTInteger,
-    float: ogr.OFTReal,
-    bool: ogr.OFSTBoolean,
-}
 
 
 def _get_node(geometry: ogr.Geometry, index: int) -> ogr.Geometry:
@@ -103,8 +89,8 @@ ORIFICE_TO_POSITIVE_PUMP_REPLACEMENT_CONFIG = {
         parser=lambda x: 1 if x == "suctionSide" else 2 if x == "deliverySide" else None
     ),
     "sewerage": ReplacementConfig(get_from="delete_layer", source_field="sewerage"),
-    "zoom_category": ReplacementConfig(get_from="delete_layer", source_field="zoom_category"),
-    "connection_node_id": ReplacementConfig(get_from="delete_layer", source_field="connection_node_start_id"),
+    "connection_node_id": ReplacementConfig(get_from="delete_layer", source_field="connection_node_id_start"),
+    "tags": ReplacementConfig(get_from="delete_layer", source_field="tags"),
 }
 
 
@@ -129,8 +115,8 @@ channel_layer_mapping = LayerMapping(
     field_mapping={
         "branch_id": "code",
         "branch_long_name": "display_name",
-        "source_node_id": Proxy("connection_node_start_id"),
-        "target_node_id": Proxy("connection_node_end_id"),
+        "source_node_id": Proxy("connection_node_id_start"),
+        "target_node_id": Proxy("connection_node_id_end"),
     },
 )
 
@@ -262,96 +248,6 @@ def extract_nodes(network_file: Path) -> Dict:
     return layer_dict
 
 
-def geometry_from_chainage(branches: Dict, branch_id: str, chainage: float) -> Point:
-    branch = branches[branch_id]
-    branch_geom: LineString = branch["geometry"]
-    return branch_geom.interpolate(chainage)
-
-
-def get_field_definitions(objects: List[INIBasedModel]) -> List[ogr.FieldDefn]:
-    """
-    Get a list of ogr.FieldDefn from a list of Structures, CrossSections, etc.
-    Ignores all fields that are not str, float, int or bool.
-    If a fields is a list of 1 value, it is converted to the type of that value
-
-    :param objects: List of structures, all structures in the list must be of the same type
-    :return: {attribute_name: ogr_field_type} dict
-    """
-    result = list()
-    object_types = set([type(s) for s in objects])
-    if len(object_types) == 0:
-        return result
-    elif len(object_types) > 1:
-        raise ValueError(f"Objects must be of exactly 1 type, not {object_types}")
-
-    attributes = []
-    for attr in dir(objects[0]):
-        if not attr.startswith("_") and not callable(getattr(objects[0], attr)):
-            attributes.append(attr)
-
-    for attribute in attributes:
-        python_types = set()
-        for structure in objects:
-            attribute_value = getattr(structure, attribute)
-            if isinstance(attribute_value, list):
-                attribute_value = ",".join([str(x) for x in attribute_value])
-            if type(attribute_value) in OGR_FIELD_TYPES.keys():
-                python_types.add(type(attribute_value))
-
-        if len(python_types) == 2:
-            python_types.discard(NoneType)
-
-        if len(python_types) == 0:
-            pass  # we are dealing with some other type of attribute that we don't need
-        elif len(python_types) == 1:
-            if list(python_types)[0] == NoneType:
-                result.append(ogr.FieldDefn(attribute, OGR_FIELD_TYPES[str]))
-            else:
-                result.append(ogr.FieldDefn(attribute, OGR_FIELD_TYPES[python_types.pop()]))
-        elif len(python_types) > 1:
-            raise ValueError(f"The values in field {attribute} have different types: {python_types}")
-    return result
-
-
-def extract_from_ini(
-        ini_file: Path,
-        object_type: Type[INIBasedModel],
-        branches: Optional[Dict] = None
-) -> Tuple[Dict, List[ogr.FieldDefn]]:
-    """``branches`` is only required if objects have a branchid and chainage from which to construct a geometry"""
-    if object_type == CrossSection:
-        extraction_model = CrossLocModel
-        attr_name = "crosssection"
-    elif object_type in SUPPORTED_CROSS_SECTIONS:
-        extraction_model = CrossDefModel
-        attr_name = "definition"
-    elif object_type in SUPPORTED_STRUCTURES:
-        extraction_model = StructureModel
-        attr_name = "structure"
-    else:
-        raise ValueError(f"Cannot extract features for object_type {object_type}")
-    unfiltered_objects = getattr(extraction_model(ini_file), attr_name)
-    objects = [o for o in unfiltered_objects if isinstance(o, object_type)]
-    has_geometery = all([hasattr(obj, "chainage") for obj in objects])
-    layer_dict = dict()
-    field_definitions = get_field_definitions(objects)
-    for obj in objects:
-        feature_dict = dict()
-        if has_geometery:
-            feature_dict["geometry"] = geometry_from_chainage(
-                branches=branches,
-                branch_id=obj.branchid,
-                chainage=obj.chainage
-            )
-        for field_definition in field_definitions:
-            value = getattr(obj, field_definition.name)
-            if isinstance(value, list):
-                value = ",".join([str(x) for x in value])
-            feature_dict[field_definition.name] = value
-        layer_dict[obj.id] = feature_dict
-    return layer_dict, field_definitions
-
-
 def import_to_threedi_layer(
         source: Dict,
         target: Path,
@@ -382,7 +278,7 @@ def import_to_threedi_layer(
     max_id = 0
     dst_layer.ResetReading()  # Ensure we read from the beginning of the layer
     for feat in dst_layer:
-        current_id = feat.GetField("id")
+        current_id = feat.GetFID()
         if current_id is not None and current_id > max_id:
             max_id = current_id
 
@@ -398,7 +294,7 @@ def import_to_threedi_layer(
         dst_feat.SetGeometry(new_geom)
 
         # Set the target primary key "id" with the next auto-increment value
-        dst_feat.SetField("id", next_id)
+        dst_feat.SetFID(next_id)
 
         for source_field, target_field in layer_mapping.field_mapping.items():
             source_value = src_feat[source_field]
@@ -534,12 +430,16 @@ def import_table(
         field_definitions: List[ogr.FieldDefn],
         feature_type: str = "unknown",
         target_layer_name: str = None,
+        epsg_code: int = None,  # required if source dict has geometry field
+        overwrite: bool = True
 ) -> None:
     """
     Writes data with no geometry to geopackage
-    Overwrites layer if exists.
+
+    :param source: {src_feat_name: src_feat} dict, in which src_feat is a {attribute_name: value} dict
     """
     target_layer_name = target_layer_name or "dhydro_" + feature_type
+    use_geometry = features_have_geometry(source)
 
     # Open or create the GeoPackage
     driver = ogr.GetDriverByName("GPKG")
@@ -550,26 +450,46 @@ def import_table(
         gpkg = driver.CreateDataSource(target)
 
     # Check if the layer already exists and remove it
-    if gpkg.GetLayerByName(target_layer_name):
-        gpkg.DeleteLayer(target_layer_name)
+    existing_layer = gpkg.GetLayerByName(target_layer_name)
+    if overwrite or not existing_layer:
+        if existing_layer:
+            deleted = gpkg.DeleteLayer(target_layer_name)
 
-    gpkg_layer = gpkg.CreateLayer(
-        name=target_layer_name,
-        geom_type=ogr.wkbNone
-    )
+        if use_geometry:
+            spatial_ref = osr.SpatialReference()
+            spatial_ref.ImportFromEPSG(epsg_code)  # Set from EPSG code
 
-    # Add additional fields to the GeoPackage layer: Structure object
-    for field_defn in field_definitions:
-        gpkg_layer.CreateField(field_defn)
+            # TODO: infer geometry type from geometries in source
+            gpkg_layer = gpkg.CreateLayer(
+                name=target_layer_name,
+                srs=spatial_ref,
+                geom_type=ogr.wkbPoint
+            )
+        else:
+            gpkg_layer = gpkg.CreateLayer(
+                name=target_layer_name,
+                geom_type=ogr.wkbNone
+            )
+
+        # Add additional fields to the GeoPackage layer
+        for field_defn in field_definitions:
+            gpkg_layer.CreateField(field_defn)
+    else:
+        gpkg_layer = existing_layer
 
     # Create features from source
     dst_layer_defn: ogr.FeatureDefn = gpkg_layer.GetLayerDefn()
     for src_feat_name, src_feat in source.items():
         dst_feat = ogr.Feature(dst_layer_defn)
+        if use_geometry:
+            new_geom = ogr.CreateGeometryFromWkb(src_feat["geometry"].wkb)
+            new_geom.FlattenTo2D()
+            dst_feat.SetGeometry(new_geom)
 
         for attr, value in src_feat.items():
-            field_index = dst_layer_defn.GetFieldIndex(attr)
-            dst_feat.SetField(field_index, value)
+            if attr != "geometry":
+                field_index = dst_layer_defn.GetFieldIndex(attr)
+                dst_feat.SetField(field_index, value)
 
         gpkg_layer.CreateFeature(dst_feat)
         dst_feat = None  # Free memory
@@ -626,7 +546,7 @@ def add_cross_section_data_to_feature(
                 feature.SetField(attribute, new_value)
     else:
         warnings.warn(
-            f"Friction data for {feature_type} with ID {feature['id']} is not valid. "
+            f"Friction data for {feature_type} with ID {feature.GetFID()} is not valid. "
             f"Reason: {cross_section_definition.friction_data.invalid_reason}"
         )
 
@@ -644,7 +564,7 @@ def enrich_cross_section_locations(
     else:
         layer = data_source.GetLayer("cross_section_location")
         for feature in layer:
-            cross_section_location_id = feature['id']
+            cross_section_location_id = feature.GetFID()
             try:
                 def_name = cross_section_id_to_defname_mapping[cross_section_location_id]
                 cross_section_definition = cross_section_data[def_name]
@@ -791,7 +711,7 @@ def map_pumps(gpkg: Path, replacement_data: List[Tuple]):
     if data_source is None:
         raise RuntimeError(f"Failed to open {gpkg}")
 
-    target_layer_name = "pumpstation_map"
+    target_layer_name = "pump_map"
     target_layer = data_source.GetLayerByName(target_layer_name)
 
     if target_layer is None:
@@ -809,16 +729,18 @@ def map_pumps(gpkg: Path, replacement_data: List[Tuple]):
         new_feature.SetGeometry(geom)
 
         # attributes from pump feature
-        new_feature.SetField("id", pump_feature.GetField("id"))
+        new_feature.SetFID(pump_feature.GetFID())
         new_feature.SetField("code", pump_feature.GetField("code"))
         new_feature.SetField("display_name", pump_feature.GetField("display_name"))
-        new_feature.SetField("pumpstation_id", pump_feature.GetField("id"))
+        new_feature.SetField("pump_id", pump_feature.GetFID())
+        new_feature.SetField("tags", pump_feature.GetField("tags"))
+
 
         # attributes from proxy-orifice feature
-        start = "connection_node_start_id" if orientation == "positive" else "connection_node_end_id"
-        end = "connection_node_end_id" if orientation == "positive" else "connection_node_start_id"
-        new_feature.SetField("connection_node_start_id", deleted_feature.GetField(start))
-        new_feature.SetField("connection_node_end_id", deleted_feature.GetField(end))
+        start = "connection_node_id_start" if orientation == "positive" else "connection_node_id_end"
+        end = "connection_node_id_end" if orientation == "positive" else "connection_node_id_start"
+        new_feature.SetField("connection_node_id_start", deleted_feature.GetField(start))
+        new_feature.SetField("connection_node_id_end", deleted_feature.GetField(end))
 
         target_layer.CreateFeature(new_feature)
 
@@ -889,10 +811,36 @@ def dflowfm2threedi(
             layer_mapping=cross_section_location_mapping,
             input_name_id_mapping=channel_name_id_mapping,
         )
+    # Friction definitions
+    print("Attempting to parse raw friction definitions")
+    mdu = configparser.ConfigParser()
+    mdu.read(mdu_path)
+    frict_files = mdu["geometry"]["FrictFile"].split(";")
+    overwrite = {FrictGlobal: True, FrictBranch: True}  # overwrite on first write only
+    for frict_file in frict_files:
+        friction_path = mdu_path.parent / frict_file
+        for friction_type in [FrictGlobal, FrictBranch]:
+            friction_entries, friction_fielddefn = extract_from_ini(
+                friction_path,
+                object_type=friction_type,
+                branches=branches
+            )
+            print(f"extracted {len(friction_entries)} {friction_type.__name__.lower()} definitions")
+            if len(friction_entries) > 0:
+                import_table(
+                    source=friction_entries,
+                    target=target_gpkg,
+                    field_definitions=friction_fielddefn,
+                    feature_type=friction_type.__name__.lower(),
+                    epsg_code=28992,
+                    overwrite=overwrite[friction_type]
+                )
+                overwrite[friction_type] = False
 
-    # Get cross-section definitions
     print("Reading friction definitions...")
     friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
+
+    # Get cross-section definitions
     print("Reading cross-section definitions...")
     cross_section_definitions: Dict[str, ThreeDiCrossSectionData] = read_cross_sections(
         cross_def_path=cross_def_path,
@@ -987,7 +935,7 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
             gpkg=gpkg,
             source=pump_data,
             delete_from_layer="orifice",
-            add_to_layer="pumpstation",
+            add_to_layer="pump",
             config=config,
             match_field="code",
             match_prefix="Pump ",
@@ -996,7 +944,7 @@ def orifices_to_pumps(gpkg: Path, network_file: Path, structures_file: Path):
 
 
 if __name__ == "__main__":
-    dsproj_data_dir = Path(r"G:\Projecten Z (2024)\Z0252 - Bovenregionale stresstest wateroverlast OV\Gegevens\Bewerking\6_Omzetting Sobek naar 3Di\Meppelerdiep\Mepperldiep aka Zedemuden saved from GUI\Meppelerdiep.dsproj_data")
+    dsproj_data_dir = Path(r"C:\Users\leendert.vanwolfswin\Downloads\Meppelerdiep.dsproj_data")
     flow_fm_input_path = dsproj_data_dir / "FlowFM" / "input"
     network_file_path = flow_fm_input_path / "FlowFM_net.nc"
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
@@ -1005,8 +953,17 @@ if __name__ == "__main__":
     structures_path = flow_fm_input_path / "structures.ini"
 
     target_gpkg = Path(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Mepperldiep\work in progress\schematisation\Mepperldiep.gpkg"
+        r"C:\Users\leendert.vanwolfswin\Documents\overijssel\Empty 1D schematisation.gpkg"
     )
+
+    flow_fm_input_path = Path(
+        # r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337 DHydro\Overijssel - P1337.dsproj_data\FlowFM\input"
+        r"C:\Users\leendert.vanwolfswin\Downloads\Meppelerdiep.dsproj_data\FlowFM\input"
+    )
+    mdu_path = flow_fm_input_path / "FlowFM.mdu"
+    # cross_def_path = flow_fm_input_path / "crsdef.ini"
+    # cross_defs = CrossDefModel(cross_def_path)
+    #
 
     # Clear schematisation geopackage (OPTIONAL)
     clear_gpkg(
@@ -1018,8 +975,8 @@ if __name__ == "__main__":
             "culvert",
             "orifice",
             "weir",
-            "pumpstation",
-            "pumpstation_map",
+            "pump",
+            "pump_map",
         ]
     )
 
@@ -1031,7 +988,7 @@ if __name__ == "__main__":
         cross_section_locations_path=cross_section_locations_path,
         cross_def_path=cross_def_path,
         structures_path=structures_path,
-        # skip_branches=True,
+        skip_branches=True,
     )
 
     ##############################################################

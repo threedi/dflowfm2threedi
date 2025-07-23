@@ -8,14 +8,14 @@ This software can make your life much easier if converting SOBEK/D-Hydro/D-FlowF
 
 Please check the result thoroughly.
 
-Leendert van Wolfswinkel, February 2025
+Leendert van Wolfswinkel, April 2025
 
 ## Versions 
 
 This manual is based on using the following versions:
 - D-HYDRO Suite 2025.01 1D2D
-- 3Di Schematisation Editor 1.16
-- 3Di database schema version 219
+- 3Di Schematisation Editor 2.0
+- 3Di database schema version 300
 
 ## Installation
 - Required packages:
@@ -36,8 +36,7 @@ This manual is based on using the following versions:
 
 ## Importing to 3Di
 
-- You need a 3Di schematisation geopackage as created by the 3Di Schematisation Editor version 1.16. Create a new schematisation or use an existing one and open the Spatialite with the 3Di Schematisation Editor; the needed geopackage will be created.
-- **REMOVE THE SCHEMATISATION FROM YOUR QGIS PROJECT BEFORE PROCEEDING**
+- Create a new schematisation. **DO NOT** add the schematisation to the QGIS project yet.
 - In the script dflowfm2threedi.py, scroll down to the section after ``if __name__ == "__main__":``
 - Change the paths to your situation
 - The script has three steps, that you will want to perform one by one. Comment out the other steps when running:
@@ -47,7 +46,7 @@ This manual is based on using the following versions:
   4. Replace pump-proxy orifices for real pumps
 - Run steps 1 and 2 of the script
 - The needed layers have been written to the 3Di schematisation geopackage as ``dhydro_{layer name}``. These layers are copies of the shapefile layers, enriched with data from the dsproj_data directory.
-- Use the Open 3Di Geopackage option to add the schematisation to your QGIS project
+- Add the schematisation to your QGIS project
 
 
 ### Culverts
@@ -77,9 +76,6 @@ Now you import both layers to your 3Di schematisation:
 - Load template > ``culvert_short.json``
 - Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
 - Run
-
-**NOTE:** Schematisation Editor 1.16 contains a bug in the vector data importer. The length field is ignored, and instead the fallback value is always used. A dev version in which this bug has been fixed is available **
-**NOTE:** Schematisation Editor 1.16 contains a bug in the vector data importer. The FIDs for newly generated cross-section locations are not unique, and can therefore not be committed. A dev version in which this bug has been fixed is available **
 
 ### Bridges
 
@@ -119,6 +115,8 @@ Do the following:
 - Check the import settings so you understand what is going on. If you spot any mistakes, update the configuration json and commit the changes to GitHub.
 - Run
 
+Complete abovementioned steps for ``dhydro_universalweir``, with the template ``universal_weir.json``
+
 ### Pumps
 
 At the moment of writing, there is no vector data importer available for pumps. However, we can use the existing functionality of the vector data importers to cut the pumps out of the channel network. The way we do this is by importing the pumps as dummy orifices, which will subsequently be replaced by pumps and pump_maps.
@@ -142,111 +140,103 @@ Do the following:
 **Culverts**
     
     with cono_ids as (
-        select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+        select connection_node_id_start as id from channel where connection_node_id_start != connection_node_id_end
         union
-        select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+        select connection_node_id_end as id from channel where connection_node_id_start != connection_node_id_end
         union
-        select connection_node_start_id as id from weir where connection_node_start_id != connection_node_end_id
+        select connection_node_id_start as id from weir where connection_node_id_start != connection_node_id_end
         union
-        select connection_node_end_id as id from weir where connection_node_start_id != connection_node_end_id
+        select connection_node_id_end as id from weir where connection_node_id_start != connection_node_id_end
         union
-        select connection_node_start_id as id from orifice where connection_node_start_id != connection_node_end_id
+        select connection_node_id_start as id from orifice where connection_node_id_start != connection_node_id_end
         union
-        select connection_node_end_id as id from orifice where connection_node_start_id != connection_node_end_id
-		union
-        select connection_node_start_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+        select connection_node_id_end as id from orifice where connection_node_id_start != connection_node_id_end
         union
-        select connection_node_end_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+        select connection_node_id_end as id from pump_map
     )
     SELECT DISTINCT culvert.* 
     FROM culvert
     where 
-        connection_node_start_id not in (select id from cono_ids)
+        connection_node_id_start not in (select id from cono_ids)
         or
-        connection_node_end_id not in (select id from cono_ids)
+        connection_node_id_end not in (select id from cono_ids)
     ;
 
 **Orifices**
 
     with cono_ids as (
-            select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from channel where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from channel where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_start_id as id from weir where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from weir where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from weir where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from weir where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_start_id as id from culvert where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from culvert where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from culvert where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from culvert where connection_node_id_start != connection_node_id_end
 			union
-			select connection_node_start_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
-			union
-			select connection_node_end_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from pump_map
         )
     SELECT DISTINCT orifice.* 
     FROM orifice
     where 
-        connection_node_start_id not in (select id from cono_ids)
+        connection_node_id_start not in (select id from cono_ids)
         or
-        connection_node_end_id not in (select id from cono_ids)
+        connection_node_id_end not in (select id from cono_ids)
     ;
 
 **Weirs**
 
     with cono_ids as (
-            select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from channel where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from channel where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_start_id as id from orifice where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from orifice where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from orifice where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from orifice where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_start_id as id from culvert where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from culvert where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from culvert where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from culvert where connection_node_id_start != connection_node_id_end
 			union
-			select connection_node_start_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
-			union
-			select connection_node_end_id as id from pumpstation_map where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from pump_map
         )
     SELECT DISTINCT weir.* 
     FROM weir
     where 
-        connection_node_start_id not in (select id from cono_ids)
+        connection_node_id_start not in (select id from cono_ids)
         or
-        connection_node_end_id not in (select id from cono_ids)
+        connection_node_id_end not in (select id from cono_ids)
     ;
 
-**Pumpstation map**
+**Pump map**
 
 
     with cono_ids as (
-            select connection_node_start_id as id from channel where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from channel where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from channel where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from channel where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_start_id as id from weir where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from weir where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from weir where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from weir where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_start_id as id from culvert where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from culvert where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from culvert where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from culvert where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_start_id as id from orifice where connection_node_start_id != connection_node_end_id
+            select connection_node_id_start as id from orifice where connection_node_id_start != connection_node_id_end
             union
-            select connection_node_end_id as id from orifice where connection_node_start_id != connection_node_end_id
+            select connection_node_id_end as id from orifice where connection_node_id_start != connection_node_id_end
 
     )
-    SELECT DISTINCT pumpstation_map.* 
-    FROM pumpstation_map
+    SELECT DISTINCT pump_map.* 
+    FROM pump_map
     where 
-        connection_node_start_id not in (select id from cono_ids)
-        or
-        connection_node_end_id not in (select id from cono_ids)
+        connection_node_id_end not in (select id from cono_ids)
     ;
 
 
