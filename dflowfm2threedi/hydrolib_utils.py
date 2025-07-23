@@ -4,11 +4,21 @@ import io
 import warnings
 from dataclasses import dataclass
 from enum import Enum
+from types import NoneType
 from typing import List, Optional, Dict, Type, SupportsRound, Tuple
 from pathlib import Path
 
-from hydrolib.core.dflowfm import Weir, Culvert, Orifice, FlowDirection, Structure, StructureModel, Compound, Pump, \
-    Bridge, UniversalWeir
+from hydrolib.core.dflowfm import (
+    Weir,
+    Culvert,
+    Orifice,
+    Structure,
+    StructureModel,
+    Compound,
+    Pump,
+    Bridge,
+    UniversalWeir
+)
 from hydrolib.core.dflowfm.crosssection.models import (
     CircleCrsDef,
     CrossDefModel,
@@ -17,14 +27,19 @@ from hydrolib.core.dflowfm.crosssection.models import (
     XYZCrsDef,  # TODO add support for XYZ profiles
     YZCrsDef,
     ZWCrsDef,
-    ZWRiverCrsDef,
+    ZWRiverCrsDef, CrossSection, CrossLocModel,
 )
 from hydrolib.core.dflowfm.friction.models import (
     FrictionModel,
-    FrictionType as DHydroFrictionType
+    FrictionType as DHydroFrictionType, FrictGlobal, FrictBranch
 )
 
 import numpy as np
+from hydrolib.core.dflowfm.ini.models import INIBasedModel
+from osgeo import ogr
+from shapely import LineString, Point
+
+ogr.UseExceptions()
 
 ASSUMED_WATER_DEPTH = 1
 SUPPORTED_STRUCTURES = (Bridge, Weir, Culvert, Orifice, Compound, Pump, UniversalWeir)
@@ -35,6 +50,13 @@ SUPPORTED_CROSS_SECTIONS = (
     ZWCrsDef,
     ZWRiverCrsDef
 )
+
+OGR_FIELD_TYPES = {
+    str: ogr.OFTString,
+    int: ogr.OFTInteger,
+    float: ogr.OFTReal,
+    bool: ogr.OFSTBoolean,
+}
 
 
 class CrossSectionShape(Enum):
@@ -74,15 +96,15 @@ class ThreeDiCrossSectionData:
     }
 
     def __init__(
-        self,
-        cross_section_shape: "CrossSectionShape",
-        code: Optional[str] = None,
-        reference_level: Optional[float] = None,
-        bank_level: Optional[float] = None,
-        cross_section_width: Optional[float] = None,
-        cross_section_height: Optional[float] = None,
-        cross_section_table: Optional[str] = None,
-        friction_data: Optional["ThreeDiFrictionData"] = None,
+            self,
+            cross_section_shape: "CrossSectionShape",
+            code: Optional[str] = None,
+            reference_level: Optional[float] = None,
+            bank_level: Optional[float] = None,
+            cross_section_width: Optional[float] = None,
+            cross_section_height: Optional[float] = None,
+            cross_section_table: Optional[str] = None,
+            friction_data: Optional["ThreeDiFrictionData"] = None,
     ):
         self.cross_section_shape = cross_section_shape
         self.code = code
@@ -173,7 +195,7 @@ class GenericFrictionDefinition:
                 # but gives a good approx.
             elif self.friction_type == DHydroFrictionType.debosbijkerk:
                 friction_type = ThreeDiFrictionType.MANNING
-                friction_value = np.round(1/(self.friction_value * ASSUMED_WATER_DEPTH ** (1 / 3)), 4)  # this
+                friction_value = np.round(1 / (self.friction_value * ASSUMED_WATER_DEPTH ** (1 / 3)), 4)  # this
                 # is far from perfect but gives a good approx.
             elif self.friction_type is None:
                 friction_type = ThreeDiFrictionType.NONE
@@ -203,8 +225,14 @@ class GenericFrictionDefinition:
 
 
 class GlobalFrictionDefinition(GenericFrictionDefinition):
-    def __init__(self, friction_id: str, friction_type: DHydroFrictionType = None, friction_value: float = None,
-                 is_valid: Optional[bool] = None, invalid_reason: Optional[str] = None):
+    def __init__(
+            self,
+            friction_id: str,
+            friction_type: DHydroFrictionType = None,
+            friction_value: float = None,
+            is_valid: Optional[bool] = None,
+            invalid_reason: Optional[str] = None
+    ):
         """
         Friction definition with a friction_id, to be coupled with a cross-section definition
 
@@ -242,11 +270,13 @@ class BranchFrictionDefinition(GenericFrictionDefinition):
         self.chainage = chainage
 
 
+class DuplicatePrimaryKeyError(Exception):
+    pass
+
+
 def none_round(number: SupportsRound, ndigits: int = None):
     """
     round() that returns None if ``number`` is None
-    :param decimals:
-    :return:
     """
     return round(number, ndigits) if number is not None else None
 
@@ -275,6 +305,57 @@ def lists_to_csv(columns: List[List[float]], decimals=None) -> str:
         writer.writerow(row)
 
     return output.getvalue().rstrip("\n")
+
+
+def get_field_definitions(objects: List[INIBasedModel]) -> List[ogr.FieldDefn]:
+    """
+    Get a list of ogr.FieldDefn from a list of Structures, CrossSections, etc.
+    Ignores all fields that are not str, float, int or bool.
+    If a fields is a list of 1 value, it is converted to the type of that value
+
+    :param objects: List of structures, all structures in the list must be of the same type
+    :return: {attribute_name: ogr_field_type} dict
+    """
+    result = list()
+    object_types = set([type(s) for s in objects])
+    if len(object_types) == 0:
+        return result
+    elif len(object_types) > 1:
+        raise ValueError(f"Objects must be of exactly 1 type, not {object_types}")
+
+    attributes = []
+    for attr in dir(objects[0]):
+        if not attr.startswith("_") and not callable(getattr(objects[0], attr)):
+            attributes.append(attr)
+
+    for attribute in attributes:
+        python_types = set()
+        for structure in objects:
+            attribute_value = getattr(structure, attribute)
+            if isinstance(attribute_value, list):
+                attribute_value = ",".join([str(x) for x in attribute_value])
+            if type(attribute_value) in OGR_FIELD_TYPES.keys():
+                python_types.add(type(attribute_value))
+
+        if len(python_types) == 2:
+            python_types.discard(NoneType)
+
+        if len(python_types) == 0:
+            pass  # we are dealing with some other type of attribute that we don't need
+        elif len(python_types) == 1:
+            if list(python_types)[0] == NoneType:
+                result.append(ogr.FieldDefn(attribute, OGR_FIELD_TYPES[str]))
+            else:
+                result.append(ogr.FieldDefn(attribute, OGR_FIELD_TYPES[python_types.pop()]))
+        elif len(python_types) > 1:
+            raise ValueError(f"The values in field {attribute} have different types: {python_types}")
+    return result
+
+
+def geometry_from_chainage(branches: Dict, branch_id: str, chainage: float) -> Point:
+    branch = branches[branch_id]
+    branch_geom: LineString = branch["geometry"]
+    return branch_geom.interpolate(chainage)
 
 
 def cross_section_def2threedi(
@@ -395,55 +476,139 @@ def cross_section_def2threedi(
     )
 
 
+def extract_from_ini(
+        ini_file: Path,
+        object_type: Type[INIBasedModel],
+        branches: Optional[Dict] = None
+) -> Tuple[Dict, List[ogr.FieldDefn]]:
+    """``branches`` is only required if objects have a branchid and chainage from which to construct a geometry"""
+    if object_type == CrossSection:
+        extraction_model = CrossLocModel
+        attr_name = "crosssection"
+        get_primary_key = lambda obj: obj.id
+    elif object_type in SUPPORTED_CROSS_SECTIONS:
+        extraction_model = CrossDefModel
+        attr_name = "definition"
+        get_primary_key = lambda obj: obj.id
+    elif object_type in SUPPORTED_STRUCTURES:
+        extraction_model = StructureModel
+        attr_name = "structure"
+        get_primary_key = lambda obj: obj.id
+    elif object_type == FrictGlobal:
+        extraction_model = FrictionModel
+        attr_name = "global_"
+        get_primary_key = lambda obj: obj.frictionid
+    elif object_type == FrictBranch:
+        extraction_model = FrictionModel
+        attr_name = "branch"
+        get_primary_key = lambda obj: obj.branchid
+    else:
+        raise ValueError(f"Cannot extract features for object_type {object_type}")
+    extracted = extraction_model(ini_file)
+    unfiltered_objects = getattr(extracted, attr_name)
+    objects = [o for o in unfiltered_objects if isinstance(o, object_type)]
+    has_geometry = all([hasattr(obj, "chainage") for obj in objects])
+    layer_dict = dict()
+    field_definitions = get_field_definitions(objects)
+    for obj in objects:
+        feature_dict = dict()
+        if has_geometry:
+            if isinstance(obj.chainage, float):
+                chainages = [obj.chainage]
+            else:
+                chainages = obj.chainage
+        else:
+            chainages = [None]
+        for chainage in chainages:
+            if chainage:
+                feature_dict["geometry"] = geometry_from_chainage(
+                    branches=branches,
+                    branch_id=obj.branchid,
+                    chainage=chainage
+                )
+            for field_definition in field_definitions:
+                value = getattr(obj, field_definition.name)
+                if isinstance(value, list):
+                    value = ",".join([str(x) for x in value])
+                feature_dict[field_definition.name] = value
+            primary_key = get_primary_key(obj)
+            if len(chainages) > 1:
+                primary_key = str(primary_key) + f": {chainage:.3f}"
+            if primary_key in layer_dict:
+                raise DuplicatePrimaryKeyError(
+                    f"Encountered multiple {object_type.__name__} with primary key {get_primary_key(obj)}"
+                )
+            layer_dict[primary_key] = feature_dict
+    return layer_dict, field_definitions
+
+
+def features_have_geometry(features: Dict) -> bool | None:
+    result = {"geometry" in feature_data for feature_data in features.values()}
+    if len(result) == 0:
+        return None
+    elif len(result) == 2:
+        raise ValueError("Features dict contains mixed set of features with and without geometry")
+    else:
+        return result.pop()
+
+
 def read_friction(mdu_file: Path) -> Tuple[
     Dict[str, GlobalFrictionDefinition],
-    Dict[str, List[BranchFrictionDefinition]]
+    Dict[str, List[BranchFrictionDefinition]],
 ]:
     """
-    Returns a {friction_id: GlobalFrictionDefinition} dict and a {branch_id: List[BranchFrictionDefinition]} dict
+    Returns:
+         - a {friction_id: GlobalFrictionDefinition} dict
+         - a {branch_id: List[BranchFrictionDefinition]} dict
     """
     # We read the MDU file with generic python libraries
     # because reading it with hydrolib-core raises all sorts of validation errors
     mdu = configparser.ConfigParser()
     mdu.read(mdu_file)
     frict_files = mdu["geometry"]["FrictFile"].split(";")
+    frict_global_list: List[FrictGlobal] = list()  # All FrictGlobal items from all frict files will be collected here
+    frict_branch_list: List[FrictBranch] = list()  # All FrictBranch items from all frict files will be collected here
     friction_definitions_dict = dict()
     branch_friction_definitions_dict = dict()
     for frict_file in frict_files:
         friction_path = mdu_file.parent / frict_file
         friction_definitions = FrictionModel(friction_path)
-        # get friction definitions from global entries
-        for friction_definition in friction_definitions.global_:
-            friction_definitions_dict[friction_definition.frictionid] = GlobalFrictionDefinition(
-                friction_id=friction_definition.frictionid,
-                friction_type=DHydroFrictionType(friction_definition.frictiontype) if
-                friction_definition.frictiontype else None,
-                friction_value=friction_definition.frictionvalue
+        frict_global_list += friction_definitions.global_
+        frict_branch_list += friction_definitions.branch
+
+    # get friction definitions from global entries
+    for friction_definition in frict_global_list:
+        friction_definitions_dict[friction_definition.frictionid] = GlobalFrictionDefinition(
+            friction_id=friction_definition.frictionid,
+            friction_type=DHydroFrictionType(friction_definition.frictiontype) if
+            friction_definition.frictiontype else None,
+            friction_value=friction_definition.frictionvalue
+        )
+
+    # get friction definitions from branch entries
+    for friction_definition in frict_branch_list:
+        if not friction_definition.chainage:
+            continue
+
+        if friction_definition.functiontype.lower() != 'constant':
+            warnings.warn(
+                f"Friction definition with a function type other than 'constant' are not supported. "
+                f"Function type: {friction_definition.functiontype}. "
+                f"Branch ID: {friction_definition.branchid}. "
+                f"Chainage: {friction_definition.chainage}."
             )
 
-        for friction_definition in friction_definitions.branch:
-            if not friction_definition.chainage:
-                continue
-
-            if friction_definition.functiontype.lower() != 'constant':
-                warnings.warn(
-                    f"Friction definition with a function type other than 'constant' are not supported. "
-                    f"Function type: {friction_definition.functiontype}. "
-                    f"Branch ID: {friction_definition.branchid}. "
-                    f"Chainage: {friction_definition.chainage}."
-                )
-
-            friction_definitions_for_this_branch = []
-            for i, chainage in enumerate(friction_definition.chainage):
-                branch_friction_definition = BranchFrictionDefinition(
-                    branch_id=friction_definition.branchid,
-                    chainage=chainage,
-                    friction_type=DHydroFrictionType(friction_definition.frictiontype) if
-                    friction_definition.frictiontype else None,
-                    friction_value=friction_definition.frictionvalues[i]
-                )
-                friction_definitions_for_this_branch.append(branch_friction_definition)
-            branch_friction_definitions_dict[friction_definition.branchid] = friction_definitions_for_this_branch
+        friction_definitions_for_this_branch = []
+        for i, chainage in enumerate(friction_definition.chainage):
+            branch_friction_definition = BranchFrictionDefinition(
+                branch_id=friction_definition.branchid,
+                chainage=chainage,
+                friction_type=DHydroFrictionType(friction_definition.frictiontype) if
+                friction_definition.frictiontype else None,
+                friction_value=friction_definition.frictionvalues[i]
+            )
+            friction_definitions_for_this_branch.append(branch_friction_definition)
+        branch_friction_definitions_dict[friction_definition.branchid] = friction_definitions_for_this_branch
     return friction_definitions_dict, branch_friction_definitions_dict
 
 
@@ -498,22 +663,32 @@ def read_cross_sections(
 if __name__ == "__main__":
     flow_fm_input_path = Path(
         # r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337 DHydro\Overijssel - P1337.dsproj_data\FlowFM\input"
-        r"C:\Users\leendert.vanwolfswin\Documents\overijssel\P1337def_case4.dsproj_data\FlowFM\input"
+        r"C:\Users\leendert.vanwolfswin\Downloads\Meppelerdiep.dsproj_data\FlowFM\input"
     )
     mdu_path = flow_fm_input_path / "FlowFM.mdu"
-    cross_def_path = flow_fm_input_path / "crsdef.ini"
-    cross_defs = CrossDefModel(cross_def_path)
-
+    # cross_def_path = flow_fm_input_path / "crsdef.ini"
+    # cross_defs = CrossDefModel(cross_def_path)
+    #
     friction_definitions, branch_friction_definitions = read_friction(mdu_file=mdu_path)
-    cross_sections = read_cross_sections(
-        cross_def_path=cross_def_path,
-        global_friction_definitions=friction_definitions
-    )
-
-    no_chainage = list()
-
     mdu = configparser.ConfigParser()
     mdu.read(mdu_path)
+    frict_files = mdu["geometry"]["FrictFile"].split(";")
+    for frict_file in frict_files:
+        friction_path = mdu_path.parent / frict_file
+        global_friction_entries = extract_from_ini(friction_path, object_type=FrictGlobal)
+        print(f"extracted {len(global_friction_entries)} global friction definitions")
+        branch_friction_entries = extract_from_ini(friction_path, object_type=FrictBranch)
+        print(f"extracted {len(branch_friction_entries)} branch friction definitions")
+
+    # cross_sections = read_cross_sections(
+    #     cross_def_path=cross_def_path,
+    #     global_friction_definitions=friction_definitions
+    # )
+    #
+    # no_chainage = list()
+    #
+    # mdu = configparser.ConfigParser()
+    # mdu.read(mdu_path)
     # frict_files = mdu["geometry"]["FrictFile"].split(";")
     # friction_definitions_dict = dict()
     # branch_friction_definitions_dict = dict()
@@ -556,10 +731,11 @@ if __name__ == "__main__":
     #
     # a = branch_friction_definitions_dict["W4890"]
 
-    structures_path = flow_fm_input_path / "structures.ini"
-    s = StructureModel(structures_path)
-    # orifices = [struct for struct in s.structure if struct.type == "orifice"]
-    compounds = [struct for struct in s.structure if struct.type == "compound"]
-    real_compounds = [c for c in compounds if c.numstructures > 1]
-
+    # structures_path = flow_fm_input_path / "structures.ini"
+    # s = StructureModel(structures_path)
+    # bridges = [struct for struct in s.structure if struct.type == "bridge"]
+    # # compounds = [struct for struct in s.structure if struct.type == "compound"]
+    # # real_compounds = [c for c in compounds if c.numstructures > 1]
+    # for bridge in bridges:
+    #     print(bridge.inletlosscoeff, bridge.outletlosscoeff)
     print("Klaar")
