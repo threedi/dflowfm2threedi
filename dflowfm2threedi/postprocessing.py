@@ -1,5 +1,4 @@
 from pathlib import Path
-from pprint import pprint
 from typing import List, Dict, Set, Tuple
 
 from osgeo import ogr
@@ -78,6 +77,11 @@ class ShortChannelDeleter:
                 else:
                     index[connection_node_id] = {(connection_node_field, feature)}
         return index
+
+    def _reconnect(self):
+        gpkg = self.data_source.GetName()
+        self.data_source = None
+        self.data_source = ogr.Open(gpkg, 1)
 
     def replaced_connection_node_id(self, old_connection_node_id: int):
         current_id = old_connection_node_id
@@ -162,12 +166,20 @@ class ShortChannelDeleter:
         # Remove the channel from self.reference_dict
         self.reference_dict.pop(channel_id)
 
-    def replace_connection_node(self, data_source, layer_name, feature_fid, delete_id, replacement_id):
+    def replace_connection_node(
+            self,
+            data_source,
+            layer_name,
+            feature_fid,
+            delete_id,
+            replacement_id
+    ):
+        """
+        Update the attribute of a feature in ``layer_name`` that refers to a deleted connection node
+        And update the geometry of that feature
+        """
         layer = data_source.GetLayerByName(layer_name)
         feature = layer.GetFeature(feature_fid)
-        print(layer_name)
-        print(feature_fid)
-        print(delete_id)
         if layer_name == "channel" and feature is None:
             return  # channel has already been deleted
 
@@ -178,7 +190,7 @@ class ShortChannelDeleter:
                 first_or_last = "first"
             else:
                 raise RuntimeError(f"This feature's connection_node_id != delete_id ({delete_id})")
-        elif layer_name != "pump_map" and feature["connection_node_id_start"] == delete_id:
+        elif feature["connection_node_id_start"] == delete_id:
             field_to_be_updated = "connection_node_id_start"
             first_or_last = "first"
         elif feature["connection_node_id_end"] == delete_id:
@@ -261,6 +273,44 @@ class ShortChannelDeleter:
         # update administration
         self.short_channels = [channel for channel in self.short_channels if channel.GetFID() not in deleted_fids]
 
+    def update_pump_map_geometries(self):
+        self._reconnect()
+        # Get layers
+        pumps = self.data_source.GetLayer("pump")
+        connection_nodes = self.data_source.GetLayer("connection_node")
+        pump_maps = self.data_source.GetLayer("pump_map")
+
+        # Build pump and connection_node geometry dictionaries
+        pump_geom_dict = {}
+        for feature in pumps:
+            pump_id = feature.GetFID()
+            geom = feature.GetGeometryRef().Clone()
+            pump_geom_dict[pump_id] = geom
+        pumps.ResetReading()
+
+        connection_node_geom_dict = {}
+        for feature in connection_nodes:
+            connection_node_id = feature.GetFID()
+            geom = feature.GetGeometryRef().Clone()
+            connection_node_geom_dict[connection_node_id] = geom
+        connection_nodes.ResetReading()
+
+        # Update each pump_map feature
+        for feature in pump_maps:
+            pump_id = feature.GetField("pump_id")
+            connection_node_id = feature.GetField("connection_node_id_end")
+
+            pump_geom = pump_geom_dict.get(pump_id)
+            connection_node_geom = connection_node_geom_dict.get(connection_node_id)
+
+            if pump_geom is not None and connection_node_geom is not None:
+                line = ogr.Geometry(ogr.wkbLineString)
+                line.AddPoint(*pump_geom.GetPoint_2D())
+                line.AddPoint(*connection_node_geom.GetPoint_2D())
+
+                feature.SetGeometry(line)
+                pump_maps.SetFeature(feature)
+
     def run(self, channel_ids: List = None):
         self.delete_zero_length_channels(channel_ids=channel_ids)
         for channel in self.short_channels:
@@ -269,6 +319,7 @@ class ShortChannelDeleter:
                     self.delete_channel(channel)
             else:
                 self.delete_channel(channel)
+        self.update_pump_map_geometries()
 
 
 def move_vertex_in_geometry(target_geom, new_vertex, first_or_last: str):
@@ -286,7 +337,7 @@ def move_vertex_in_geometry(target_geom, new_vertex, first_or_last: str):
 
 if __name__ == "__main__":
     scd = ShortChannelDeleter(
-        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Stroink\work in progress\schematisation\Stroink.gpkg",
+        r"C:\Users\leendert.vanwolfswin\Documents\3Di\Vector data importers test schematisation\work in progress\schematisation\Vector data importers test schematisation.gpkg",
         threshold=5
     )
     scd.run()
